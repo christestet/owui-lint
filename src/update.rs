@@ -1,8 +1,7 @@
 use std::process::Command;
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const RELEASES_API: &str =
-    "https://api.github.com/repos/christestet/owui-lint/releases/latest";
+const RELEASES_API: &str = "https://api.github.com/repos/christestet/owui-lint/releases/latest";
 const INSTALLER_SH: &str =
     "https://github.com/christestet/owui-lint/releases/latest/download/owui-lint-installer.sh";
 const INSTALLER_PS1: &str =
@@ -65,9 +64,7 @@ pub fn run_update() -> i32 {
         Command::new("sh")
             .args([
                 "-c",
-                &format!(
-                    "curl --proto '=https' --tlsv1.2 -LsSf '{INSTALLER_SH}' | sh"
-                ),
+                &format!("curl --proto '=https' --tlsv1.2 -LsSf '{INSTALLER_SH}' | sh"),
             ])
             .status()
     };
@@ -78,10 +75,7 @@ pub fn run_update() -> i32 {
             0
         }
         Ok(s) => {
-            eprintln!(
-                "Installer exited with code {}",
-                s.code().unwrap_or(-1)
-            );
+            eprintln!("Installer exited with code {}", s.code().unwrap_or(-1));
             1
         }
         Err(e) => {
