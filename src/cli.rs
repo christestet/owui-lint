@@ -86,6 +86,8 @@ enum Commands {
         #[arg(short = 'o', long, value_name = "PATH")]
         output: Option<PathBuf>,
     },
+    /// Check for updates and install the latest version.
+    Update,
     /// Explain a lint rule (for example: OWT101).
     Explain {
         rule_id: String,
@@ -139,6 +141,7 @@ where
             };
             write_or_print(&rendered, output)
         }
+        Some(Commands::Update) => crate::update::run_update(),
         Some(Commands::Explain { rule_id, output }) => {
             let normalized = rule_id.trim().to_ascii_uppercase();
             let rendered = match format_rule_explanation(&normalized) {
