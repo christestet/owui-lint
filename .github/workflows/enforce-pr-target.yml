@@ -1,0 +1,20 @@
+name: Enforce PR Target
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-source-branch:
+    name: Source branch must be dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify source branch
+        run: |
+          echo "PR source branch: ${{ github.head_ref }}"
+          if [ "${{ github.head_ref }}" != "dev" ]; then
+            echo "ERROR: PRs to main must originate from the 'dev' branch."
+            echo "This PR comes from '${{ github.head_ref }}'. Please target 'dev' instead."
+            exit 1
+          fi
+          echo "OK: Source branch is 'dev'."
