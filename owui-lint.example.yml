@@ -1,0 +1,14 @@
+lint:
+  include:
+    - "**/*.py"
+  exclude:
+    - ".git/**"
+    - ".venv/**"
+    - "**/__pycache__/**"
+
+rules:
+  # values: error | warning | off
+  OWUI020: off
+  OWT101: error
+  OWP202: warning
+  OWPL501: warning

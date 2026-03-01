@@ -1,0 +1,9 @@
+.git
+.gitignore
+.vscode
+.agents
+target
+owui-lint.sarif
+owui-lint-report.json
+bin
+scripts

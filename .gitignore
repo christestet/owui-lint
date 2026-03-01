@@ -1,0 +1,13 @@
+# Rust build artifacts
+target/
+
+# Reports
+owui-lint.sarif
+owui-lint-report.json
+bin/
+
+# OS / editor
+.DS_Store
+.vscode/
+
+examples
