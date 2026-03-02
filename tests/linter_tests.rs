@@ -35,9 +35,11 @@ fn pipe_with_filter_methods_is_warning() {
         .expect("discovery should work");
     let (issues, _) = lint_files(&files, &config);
 
-    assert!(issues
-        .iter()
-        .any(|issue| issue.rule_id == "OWP201" && issue.severity == Severity::Warning));
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWP201" && issue.severity == Severity::Warning)
+    );
 }
 
 #[test]
@@ -53,9 +55,11 @@ fn tools_method_without_docstring_warns() {
         .expect("discovery should work");
     let (issues, _) = lint_files(&files, &config);
 
-    assert!(issues
-        .iter()
-        .any(|issue| issue.rule_id == "OWT101" && issue.severity == Severity::Warning));
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWT101" && issue.severity == Severity::Warning)
+    );
 }
 
 #[test]
@@ -140,9 +144,11 @@ fn missing_version_in_header_warns_owui030() {
         .expect("discovery should work");
     let (issues, _) = lint_files(&files, &config);
 
-    assert!(issues
-        .iter()
-        .any(|issue| issue.rule_id == "OWUI030" && issue.severity == Severity::Warning));
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWUI030" && issue.severity == Severity::Warning)
+    );
     assert!(!issues.iter().any(|issue| issue.rule_id == "OWUI031"));
 }
 
@@ -159,9 +165,11 @@ fn unpinned_requirements_in_header_warns_owui031() {
         .expect("discovery should work");
     let (issues, _) = lint_files(&files, &config);
 
-    assert!(issues
-        .iter()
-        .any(|issue| issue.rule_id == "OWUI031" && issue.severity == Severity::Warning));
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWUI031" && issue.severity == Severity::Warning)
+    );
     assert!(!issues.iter().any(|issue| issue.rule_id == "OWUI030"));
 }
 

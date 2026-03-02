@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use owui_lint::models::Severity;
-use owui_lint::rules::{all_rules, is_known_rule, issue, OWP200, OWT101};
+use owui_lint::rules::{OWP200, OWT101, all_rules, is_known_rule, issue};
 
 #[test]
 fn rule_catalog_has_unique_ids() {
