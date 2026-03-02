@@ -3,6 +3,12 @@
 ![Rust](https://img.shields.io/badge/Rust-2021-000000?logo=rust&logoColor=white)
 ![license](https://img.shields.io/badge/license-MIT-blue.svg)
 
+> **Disclaimer:** `owui-lint` is a hobby project and is **not** developed or maintained by the
+> [Open WebUI](https://github.com/open-webui/open-webui) team. Thank you to the Open WebUI
+> maintainers for building an amazing platform. The rulesets in this tool are opinionated and
+> derived from studying the Open WebUI extension codebase — they are **not** official rules
+> endorsed by the Open WebUI project.
+
 `owui-lint` is a Rust CLI linter for Open WebUI extensions:
 
 - `Tools`
