@@ -633,7 +633,6 @@ fn is_docstring_line(trimmed: &str) -> bool {
     trimmed.starts_with("\"\"\"") || trimmed.starts_with("'''")
 }
 
-
 struct StringState {
     quote: Option<char>,
     triple_quote: bool,

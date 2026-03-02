@@ -154,7 +154,6 @@ fn unquote(value: &str) -> &str {
     value
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::{load_config, parse_yaml_config, Config};
