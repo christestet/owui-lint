@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use crate::models::SeverityOverride;
 use crate::util::{count_indent, strip_inline_comment};
@@ -156,7 +156,7 @@ fn unquote(value: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{load_config, parse_yaml_config, Config};
+    use super::{Config, load_config, parse_yaml_config};
     use std::fs;
 
     #[test]

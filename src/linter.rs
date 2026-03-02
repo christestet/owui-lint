@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use walkdir::WalkDir;
 
 use crate::analysis::analyze_file;
@@ -9,8 +9,8 @@ use crate::config::Config;
 use crate::glob::glob_match;
 use crate::models::{ClassInfo, Issue, LintSummary, ModuleInfo, Severity, SeverityOverride};
 use crate::rules::{
-    issue, OWA400, OWA401, OWF300, OWF301, OWF302, OWP200, OWP201, OWP202, OWPL500, OWPL501,
-    OWT100, OWT101, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021, OWUI022, OWUI030, OWUI031,
+    OWA400, OWA401, OWF300, OWF301, OWF302, OWP200, OWP201, OWP202, OWPL500, OWPL501, OWT100,
+    OWT101, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021, OWUI022, OWUI030, OWUI031, issue,
 };
 
 const EXTENSION_CLASSES: [(&str, &str); 5] = [
