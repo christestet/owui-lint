@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::models::{ClassInfo, FunctionInfo, ModuleInfo, NestedClassInfo, SyntaxErrorInfo};
+use crate::util::{count_indent, strip_inline_comment};
 
 #[derive(Debug)]
 struct ClassContext {
@@ -165,106 +166,21 @@ fn parse_module(path: &Path, source: &str) -> ModuleInfo {
             }
         }
 
-        if let Some((name, bases)) = parse_class_definition(trimmed) {
-            let column = indent + 1;
-            if let Some(parent_index) = current_top_level_class_index(&contexts) {
-                module.classes[parent_index]
-                    .inner_classes
-                    .push(NestedClassInfo { name, bases });
-                contexts.push(Context::Class(ClassContext {
-                    indent,
-                    class_index: None,
-                    first_stmt_seen: false,
-                }));
-            } else if indent == 0 {
-                module.classes.push(ClassInfo {
-                    name,
-                    line: line_no,
-                    column,
-                    bases,
-                    methods: Vec::new(),
-                    inner_classes: Vec::new(),
-                    init_assignments: BTreeSet::new(),
-                    has_docstring: false,
-                });
-                let class_index = module.classes.len() - 1;
-                contexts.push(Context::Class(ClassContext {
-                    indent,
-                    class_index: Some(class_index),
-                    first_stmt_seen: false,
-                }));
-            } else {
-                contexts.push(Context::Class(ClassContext {
-                    indent,
-                    class_index: None,
-                    first_stmt_seen: false,
-                }));
-            }
+        if handle_class_definition(&mut module, &mut contexts, trimmed, indent, line_no) {
             line_idx += 1;
             continue;
         }
 
         if is_function_start(trimmed) {
-            let (signature, consumed_lines) = collect_function_signature(&lines, line_idx);
-            let signature = signature.trim();
-            if let Some(definition) = parse_function_definition(signature) {
-                let column = indent + 1;
-                if let Some(class_index) = direct_parent_class_index(&contexts) {
-                    module.classes[class_index].methods.push(FunctionInfo {
-                        name: definition.name.clone(),
-                        line: line_no,
-                        column,
-                        args: definition.args,
-                        decorators: Vec::new(),
-                        is_async: definition.is_async,
-                        has_docstring: false,
-                        returns_annotation: definition.returns_annotation,
-                        returns_body: false,
-                    });
-                    let method_index = module.classes[class_index].methods.len() - 1;
-                    let is_init_method = definition.name == "__init__";
-                    contexts.push(Context::Function(FunctionContext {
-                        indent,
-                        target: FunctionTarget::Method {
-                            class_index,
-                            method_index,
-                        },
-                        class_index: Some(class_index),
-                        is_init_method,
-                        first_stmt_seen: false,
-                    }));
-                } else if indent == 0 {
-                    module.functions.push(FunctionInfo {
-                        name: definition.name,
-                        line: line_no,
-                        column,
-                        args: definition.args,
-                        decorators: Vec::new(),
-                        is_async: definition.is_async,
-                        has_docstring: false,
-                        returns_annotation: definition.returns_annotation,
-                        returns_body: false,
-                    });
-                    let function_index = module.functions.len() - 1;
-                    contexts.push(Context::Function(FunctionContext {
-                        indent,
-                        target: FunctionTarget::Module(function_index),
-                        class_index: None,
-                        is_init_method: false,
-                        first_stmt_seen: false,
-                    }));
-                } else {
-                    contexts.push(Context::Function(FunctionContext {
-                        indent,
-                        target: FunctionTarget::Ignore,
-                        class_index: current_top_level_class_index(&contexts),
-                        is_init_method: false,
-                        first_stmt_seen: false,
-                    }));
-                }
-            }
-
-            line_idx += consumed_lines;
+            let consumed = handle_function_definition(
+                &mut module,
+                &mut contexts,
+                &lines,
+                line_idx,
+                indent,
+                line_no,
+            );
+            line_idx += consumed;
             continue;
         }
 
@@ -272,6 +188,123 @@ fn parse_module(path: &Path, source: &str) -> ModuleInfo {
     }
 
     module
+}
+
+fn handle_class_definition(
+    module: &mut ModuleInfo,
+    contexts: &mut Vec<Context>,
+    trimmed: &str,
+    indent: usize,
+    line_no: usize,
+) -> bool {
+    let Some((name, bases)) = parse_class_definition(trimmed) else {
+        return false;
+    };
+    let column = indent + 1;
+    if let Some(parent_index) = current_top_level_class_index(contexts) {
+        module.classes[parent_index]
+            .inner_classes
+            .push(NestedClassInfo { name, bases });
+        contexts.push(Context::Class(ClassContext {
+            indent,
+            class_index: None,
+            first_stmt_seen: false,
+        }));
+    } else if indent == 0 {
+        module.classes.push(ClassInfo {
+            name,
+            line: line_no,
+            column,
+            bases,
+            methods: Vec::new(),
+            inner_classes: Vec::new(),
+            init_assignments: BTreeSet::new(),
+            has_docstring: false,
+        });
+        let class_index = module.classes.len() - 1;
+        contexts.push(Context::Class(ClassContext {
+            indent,
+            class_index: Some(class_index),
+            first_stmt_seen: false,
+        }));
+    } else {
+        contexts.push(Context::Class(ClassContext {
+            indent,
+            class_index: None,
+            first_stmt_seen: false,
+        }));
+    }
+    true
+}
+
+fn handle_function_definition(
+    module: &mut ModuleInfo,
+    contexts: &mut Vec<Context>,
+    lines: &[&str],
+    line_idx: usize,
+    indent: usize,
+    line_no: usize,
+) -> usize {
+    let (signature, consumed_lines) = collect_function_signature(lines, line_idx);
+    let signature = signature.trim();
+    let Some(definition) = parse_function_definition(signature) else {
+        return consumed_lines;
+    };
+    let column = indent + 1;
+    if let Some(class_index) = direct_parent_class_index(contexts) {
+        module.classes[class_index].methods.push(FunctionInfo {
+            name: definition.name.clone(),
+            line: line_no,
+            column,
+            args: definition.args,
+            decorators: Vec::new(),
+            is_async: definition.is_async,
+            has_docstring: false,
+            returns_annotation: definition.returns_annotation,
+            returns_body: false,
+        });
+        let method_index = module.classes[class_index].methods.len() - 1;
+        let is_init_method = definition.name == "__init__";
+        contexts.push(Context::Function(FunctionContext {
+            indent,
+            target: FunctionTarget::Method {
+                class_index,
+                method_index,
+            },
+            class_index: Some(class_index),
+            is_init_method,
+            first_stmt_seen: false,
+        }));
+    } else if indent == 0 {
+        module.functions.push(FunctionInfo {
+            name: definition.name,
+            line: line_no,
+            column,
+            args: definition.args,
+            decorators: Vec::new(),
+            is_async: definition.is_async,
+            has_docstring: false,
+            returns_annotation: definition.returns_annotation,
+            returns_body: false,
+        });
+        let function_index = module.functions.len() - 1;
+        contexts.push(Context::Function(FunctionContext {
+            indent,
+            target: FunctionTarget::Module(function_index),
+            class_index: None,
+            is_init_method: false,
+            first_stmt_seen: false,
+        }));
+    } else {
+        contexts.push(Context::Function(FunctionContext {
+            indent,
+            target: FunctionTarget::Ignore,
+            class_index: current_top_level_class_index(contexts),
+            is_init_method: false,
+            first_stmt_seen: false,
+        }));
+    }
+    consumed_lines
 }
 
 fn is_function_start(trimmed: &str) -> bool {
@@ -600,25 +633,91 @@ fn is_docstring_line(trimmed: &str) -> bool {
     trimmed.starts_with("\"\"\"") || trimmed.starts_with("'''")
 }
 
-fn strip_inline_comment(line: &str) -> &str {
-    let mut in_single = false;
-    let mut in_double = false;
-    for (idx, ch) in line.char_indices() {
-        match ch {
-            '\'' if !in_double => in_single = !in_single,
-            '"' if !in_single => in_double = !in_double,
-            '#' if !in_single && !in_double => return &line[..idx],
-            _ => {}
-        }
-    }
-    line
+struct StringState {
+    quote: Option<char>,
+    triple_quote: bool,
+    escaped: bool,
 }
 
-fn count_indent(line: &str) -> usize {
-    line.chars()
-        .take_while(|ch| matches!(ch, ' ' | '\t'))
-        .map(|ch| if ch == '\t' { 4 } else { 1 })
-        .sum()
+fn advance_through_string(
+    state: &mut StringState,
+    chars: &[char],
+    idx: usize,
+    column: &mut usize,
+) -> usize {
+    let active_quote = match state.quote {
+        Some(q) => q,
+        None => return idx,
+    };
+    let ch = chars[idx];
+
+    if state.escaped {
+        state.escaped = false;
+        return idx + 1;
+    }
+
+    if ch == '\\' {
+        state.escaped = true;
+        return idx + 1;
+    }
+
+    if state.triple_quote {
+        if ch == active_quote
+            && idx + 2 < chars.len()
+            && chars[idx + 1] == active_quote
+            && chars[idx + 2] == active_quote
+        {
+            state.quote = None;
+            state.triple_quote = false;
+            *column += 2;
+            return idx + 3;
+        }
+        return idx + 1;
+    }
+
+    if ch == active_quote {
+        state.quote = None;
+    }
+    idx + 1
+}
+
+fn check_closing_bracket(
+    ch: char,
+    stack: &mut Vec<(char, usize, usize)>,
+    source: &str,
+    line: usize,
+    column: usize,
+) -> Option<SyntaxErrorInfo> {
+    let expected_open = match ch {
+        ')' => '(',
+        ']' => '[',
+        '}' => '{',
+        _ => unreachable!(),
+    };
+    if let Some((open, _, _)) = stack.pop() {
+        if open != expected_open {
+            return Some(SyntaxErrorInfo {
+                message: format!("Mismatched delimiter: found '{ch}'"),
+                line,
+                column,
+                text: source
+                    .lines()
+                    .nth(line - 1)
+                    .map(|line_text| line_text.to_string()),
+            });
+        }
+    } else {
+        return Some(SyntaxErrorInfo {
+            message: format!("Unmatched closing delimiter: '{ch}'"),
+            line,
+            column,
+            text: source
+                .lines()
+                .nth(line - 1)
+                .map(|line_text| line_text.to_string()),
+        });
+    }
+    None
 }
 
 fn detect_syntax_error(source: &str) -> Option<SyntaxErrorInfo> {
@@ -628,55 +727,26 @@ fn detect_syntax_error(source: &str) -> Option<SyntaxErrorInfo> {
     let chars: Vec<char> = source.chars().collect();
     let mut idx = 0;
 
-    let mut quote: Option<char> = None;
-    let mut triple_quote = false;
-    let mut escaped = false;
+    let mut string_state = StringState {
+        quote: None,
+        triple_quote: false,
+        escaped: false,
+    };
 
     while idx < chars.len() {
         let ch = chars[idx];
         if ch == '\n' {
             line += 1;
             column = 0;
-            escaped = false;
+            string_state.escaped = false;
             idx += 1;
             continue;
         }
 
         column += 1;
 
-        if let Some(active_quote) = quote {
-            if escaped {
-                escaped = false;
-                idx += 1;
-                continue;
-            }
-
-            if ch == '\\' {
-                escaped = true;
-                idx += 1;
-                continue;
-            }
-
-            if triple_quote {
-                if ch == active_quote
-                    && idx + 2 < chars.len()
-                    && chars[idx + 1] == active_quote
-                    && chars[idx + 2] == active_quote
-                {
-                    quote = None;
-                    triple_quote = false;
-                    idx += 3;
-                    column += 2;
-                    continue;
-                }
-                idx += 1;
-                continue;
-            }
-
-            if ch == active_quote {
-                quote = None;
-            }
-            idx += 1;
+        if string_state.quote.is_some() {
+            idx = advance_through_string(&mut string_state, &chars, idx, &mut column);
             continue;
         }
 
@@ -689,8 +759,8 @@ fn detect_syntax_error(source: &str) -> Option<SyntaxErrorInfo> {
 
         if ch == '\'' || ch == '"' {
             let is_triple = idx + 2 < chars.len() && chars[idx + 1] == ch && chars[idx + 2] == ch;
-            quote = Some(ch);
-            triple_quote = is_triple;
+            string_state.quote = Some(ch);
+            string_state.triple_quote = is_triple;
             if is_triple {
                 idx += 3;
                 column += 2;
@@ -707,34 +777,8 @@ fn detect_syntax_error(source: &str) -> Option<SyntaxErrorInfo> {
         }
 
         if matches!(ch, ')' | ']' | '}') {
-            let expected_open = match ch {
-                ')' => '(',
-                ']' => '[',
-                '}' => '{',
-                _ => unreachable!(),
-            };
-            if let Some((open, _, _)) = stack.pop() {
-                if open != expected_open {
-                    return Some(SyntaxErrorInfo {
-                        message: format!("Mismatched delimiter: found '{ch}'"),
-                        line,
-                        column,
-                        text: source
-                            .lines()
-                            .nth(line - 1)
-                            .map(|line_text| line_text.to_string()),
-                    });
-                }
-            } else {
-                return Some(SyntaxErrorInfo {
-                    message: format!("Unmatched closing delimiter: '{ch}'"),
-                    line,
-                    column,
-                    text: source
-                        .lines()
-                        .nth(line - 1)
-                        .map(|line_text| line_text.to_string()),
-                });
+            if let Some(error) = check_closing_bracket(ch, &mut stack, source, line, column) {
+                return Some(error);
             }
             idx += 1;
             continue;

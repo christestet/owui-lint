@@ -103,7 +103,7 @@ pub struct ModuleInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Issue {
-    pub rule_id: String,
+    pub rule_id: &'static str,
     pub severity: Severity,
     pub message: String,
     pub path: PathBuf,
