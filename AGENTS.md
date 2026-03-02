@@ -1,35 +1,33 @@
 # AGENTS.md
 
-## Open WebUI Lint - owui-lint
+## Why
 
-`owui-lint` is a Rust-only CLI linter for Open WebUI extensions:
+`owui-lint` is a standalone CLI linter that catches mistakes in Open WebUI extensions (Tools, Pipes, Filters, Actions, Pipelines) before they reach production.
 
-- Tools
-- Pipe
-- Filter
-- Action
-- Pipeline
+## What
 
-## Goal
+- **Language:** Rust (single binary, no runtime dependencies)
+- **Config:** `owui-lint.yml` (see `owui-lint.example.yml` for schema)
+- **Source layout:** `src/` — `cli.rs` (arg parsing), `analysis.rs` (AST walks), `rules.rs` (lint rules), `linter.rs` (orchestration), `output.rs` (text/JSON/SARIF reporters), `config.rs`, `models.rs`
+- **Tests:** `tests/` (integration), inline `#[cfg(test)]` (unit)
 
-- Distribute as a single binary CLI tool.
-- Configure linting rules via `config.yml`/`owui-lint.yml`.
-- Use Makefile
+## How
 
-## Docs
+Use the Makefile for all common workflows:
 
-For Open WebUI extension specifics, use references in:
+```
+make check        # fmt-check + clippy + test (the CI gate)
+make run          # lint current directory
+make build        # debug build
+```
 
-- `.agents/openwebui-extensions/SKILL.md`
+Verify every change with `make check` before committing.
 
-## Project
+## Deep-Dive Docs
 
-- Rust
-- CLI, analysis, rule engine, and output all implemented in Rust
-- Binary distribution via `cargo build --release`
+Read these **on demand** when the task requires domain knowledge — do not load them all upfront.
 
-## Testing and Quality
-
-- `cargo fmt -- --check`
-- `cargo clippy -- -D warnings`
-- `cargo test`
+| Topic | Path | When to read |
+|---|---|---|
+| Open WebUI extension specs | `.agents/openwebui-extensions/SKILL.md` | Adding/modifying lint rules for extension types |
+| Rust anti-patterns | `.agents/skills/rust-antipatterns/SKILL.md` | Writing or reviewing Rust implementation code |

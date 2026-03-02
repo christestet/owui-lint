@@ -81,7 +81,7 @@ pub fn lint_files(files: &[PathBuf], config: &Config) -> (Vec<Issue>, LintSummar
             .cmp(&right.path)
             .then_with(|| left.line.cmp(&right.line))
             .then_with(|| left.column.cmp(&right.column))
-            .then_with(|| left.rule_id.cmp(&right.rule_id))
+            .then_with(|| left.rule_id.cmp(right.rule_id))
     });
 
     let errors = filtered
@@ -106,7 +106,7 @@ pub fn lint_files(files: &[PathBuf], config: &Config) -> (Vec<Issue>, LintSummar
 fn apply_rule_overrides(mut issues: Vec<Issue>, config: &Config) -> Vec<Issue> {
     let mut filtered = Vec::with_capacity(issues.len());
     for mut issue in issues.drain(..) {
-        match config.rule_overrides.get(&issue.rule_id) {
+        match config.rule_overrides.get(issue.rule_id) {
             Some(SeverityOverride::Off) => continue,
             Some(SeverityOverride::Error) => issue.severity = Severity::Error,
             Some(SeverityOverride::Warning) => issue.severity = Severity::Warning,
@@ -236,9 +236,8 @@ fn lint_extension_class(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
 
 fn lint_common(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
     let mut issues = Vec::new();
-    let valves = class_info.inner_class("Valves");
 
-    if valves.is_none() {
+    let Some(valves) = class_info.inner_class("Valves") else {
         issues.push(issue(
             OWUI020,
             path,
@@ -250,9 +249,8 @@ fn lint_common(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
             ),
         ));
         return issues;
-    }
+    };
 
-    let valves = valves.expect("checked as some");
     let has_base_model = valves
         .bases
         .iter()
@@ -334,11 +332,10 @@ fn lint_tools(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
 
 fn lint_pipe(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
     let mut issues = Vec::new();
-    let pipe_method = class_info.method("pipe");
     let inlet_method = class_info.method("inlet");
     let outlet_method = class_info.method("outlet");
 
-    if pipe_method.is_none() {
+    let Some(pipe_method) = class_info.method("pipe") else {
         return vec![issue(
             OWP200,
             path,
@@ -346,9 +343,7 @@ fn lint_pipe(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
             class_info.column,
             "Pipe class must define a 'pipe' method.",
         )];
-    }
-
-    let pipe_method = pipe_method.expect("checked as some");
+    };
 
     if inlet_method.is_some() || outlet_method.is_some() {
         issues.push(issue(
@@ -418,8 +413,8 @@ fn lint_filter(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
 
 fn lint_action(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
     let mut issues = Vec::new();
-    let action = class_info.method("action");
-    if action.is_none() {
+
+    let Some(action) = class_info.method("action") else {
         return vec![issue(
             OWA400,
             path,
@@ -427,9 +422,8 @@ fn lint_action(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
             class_info.column,
             "Action class must define an 'action' method.",
         )];
-    }
+    };
 
-    let action = action.expect("checked as some");
     if !action.is_async {
         issues.push(issue(
             OWA401,

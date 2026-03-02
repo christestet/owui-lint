@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Result};
 
 use crate::models::SeverityOverride;
+use crate::util::{count_indent, strip_inline_comment};
 
 const DEFAULT_EXCLUDES: [&str; 3] = [".git/**", ".venv/**", "**/__pycache__/**"];
 
@@ -77,7 +78,7 @@ fn parse_yaml_config(input: &str) -> std::result::Result<Config, String> {
     let mut lint_list_key = String::new();
 
     for raw_line in input.lines() {
-        let line_without_comment = strip_comment(raw_line);
+        let line_without_comment = strip_inline_comment(raw_line);
         if line_without_comment.trim().is_empty() {
             continue;
         }
@@ -143,13 +144,6 @@ fn split_key_value(line: &str) -> Option<(&str, &str)> {
     Some((key, value))
 }
 
-fn count_indent(line: &str) -> usize {
-    line.chars()
-        .take_while(|ch| matches!(ch, ' ' | '\t'))
-        .map(|ch| if ch == '\t' { 4 } else { 1 })
-        .sum()
-}
-
 fn unquote(value: &str) -> &str {
     if value.len() >= 2
         && ((value.starts_with('"') && value.ends_with('"'))
@@ -160,19 +154,6 @@ fn unquote(value: &str) -> &str {
     value
 }
 
-fn strip_comment(line: &str) -> &str {
-    let mut in_single = false;
-    let mut in_double = false;
-    for (idx, ch) in line.char_indices() {
-        match ch {
-            '\'' if !in_double => in_single = !in_single,
-            '"' if !in_single => in_double = !in_double,
-            '#' if !in_single && !in_double => return &line[..idx],
-            _ => {}
-        }
-    }
-    line
-}
 
 #[cfg(test)]
 mod tests {

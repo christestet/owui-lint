@@ -21,7 +21,7 @@ pub fn format_text(issues: &[Issue], summary: &LintSummary) -> String {
             issue.message
         ));
 
-        if let Some(rule) = rule_doc(&issue.rule_id) {
+        if let Some(rule) = rule_doc(issue.rule_id) {
             lines.push(format!("  help: {}", rule.summary));
             lines.push(format!("  fix: {}", rule.remediation));
         }
@@ -69,7 +69,7 @@ pub fn format_json(issues: &[Issue], summary: &LintSummary) -> String {
         help_url: &'a str,
     }
 
-    let unique_rules: BTreeSet<&str> = issues.iter().map(|issue| issue.rule_id.as_str()).collect();
+    let unique_rules: BTreeSet<&str> = issues.iter().map(|issue| issue.rule_id).collect();
 
     let payload = json!({
         "summary": summary,
@@ -88,9 +88,9 @@ pub fn format_json(issues: &[Issue], summary: &LintSummary) -> String {
         "issues": issues
             .iter()
             .map(|issue| {
-                let rule = rule_doc(&issue.rule_id);
+                let rule = rule_doc(issue.rule_id);
                 JsonIssue {
-                    rule_id: &issue.rule_id,
+                    rule_id: issue.rule_id,
                     severity: issue.severity,
                     message: &issue.message,
                     path: issue.path.display().to_string(),
@@ -117,7 +117,7 @@ pub fn format_github(issues: &[Issue], summary: &LintSummary) -> String {
         } else {
             "warning"
         };
-        let rule = rule_doc(&issue.rule_id);
+        let rule = rule_doc(issue.rule_id);
         let message = escape_github(&format!(
             "{}: {}{}",
             issue.rule_id,
@@ -149,7 +149,7 @@ pub fn format_github(issues: &[Issue], summary: &LintSummary) -> String {
 }
 
 pub fn format_sarif(issues: &[Issue], summary: &LintSummary, version: &str) -> String {
-    let unique_rules: BTreeSet<_> = issues.iter().map(|issue| issue.rule_id.clone()).collect();
+    let unique_rules: BTreeSet<&str> = issues.iter().map(|issue| issue.rule_id).collect();
     let rules = unique_rules
         .iter()
         .map(|rule_id| {
@@ -319,7 +319,7 @@ fn escape_github(text: &str) -> String {
 fn format_rule_counts(issues: &[Issue]) -> String {
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     for issue in issues {
-        *counts.entry(issue.rule_id.as_str()).or_insert(0) += 1;
+        *counts.entry(issue.rule_id).or_insert(0) += 1;
     }
 
     counts

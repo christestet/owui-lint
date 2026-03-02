@@ -217,7 +217,7 @@ pub fn is_known_rule(rule_id: &str) -> bool {
 }
 
 pub fn issue(
-    rule_id: &str,
+    rule_id: &'static str,
     path: &Path,
     line: usize,
     column: usize,
@@ -227,7 +227,7 @@ pub fn issue(
         .unwrap_or_else(|| panic!("Unknown rule ID '{rule_id}'. Add it to src/rules.rs first."));
 
     Issue {
-        rule_id: rule_id.to_string(),
+        rule_id,
         severity: rule.default_severity,
         message: message.into(),
         path: PathBuf::from(path),
