@@ -6,5 +6,6 @@ pub mod linter;
 pub mod models;
 pub mod output;
 pub mod rules;
+pub mod update;
 
 pub use cli::run;

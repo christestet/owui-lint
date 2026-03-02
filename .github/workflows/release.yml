@@ -1,0 +1,205 @@
+# CI that builds release binaries via cargo-dist.
+# Triggered on push of v* tags (e.g. v0.1.0).
+#
+# Auto-generated-like workflow for cargo-dist v0.31.0
+# https://opensource.axo.dev/cargo-dist/
+
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Build matrix: one job per target triple.
+  build:
+    name: Build – ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            cross: true
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross (Linux aarch64)
+        if: matrix.cross
+        run: cargo install cross --locked
+
+      - name: Build
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cross build --release --locked --target ${{ matrix.target }}
+          else
+            cargo build --release --locked --target ${{ matrix.target }}
+          fi
+        shell: bash
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../owui-lint-${{ matrix.target }}.tar.gz owui-lint
+        shell: bash
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ../../../owui-lint-${{ matrix.target }}.zip owui-lint.exe
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: owui-lint-${{ matrix.target }}.*
+
+  # Generate checksums and create GitHub Release.
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate SHA-256 checksums
+        run: |
+          cd dist
+          sha256sum owui-lint-* > sha256-checksums.txt
+          cat sha256-checksums.txt
+
+      - name: Generate installer scripts
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          REPO="christestet/owui-lint"
+
+          # --- shell installer ---
+          cat > dist/owui-lint-installer.sh << 'SHELL_EOF'
+          #!/bin/sh
+          set -eu
+
+          REPO="christestet/owui-lint"
+
+          detect_target() {
+            arch=$(uname -m)
+            os=$(uname -s)
+            case "$os" in
+              Linux)
+                case "$arch" in
+                  x86_64)  echo "x86_64-unknown-linux-gnu" ;;
+                  aarch64) echo "aarch64-unknown-linux-gnu" ;;
+                  *) echo "Unsupported architecture: $arch" >&2; exit 1 ;;
+                esac
+                ;;
+              Darwin)
+                case "$arch" in
+                  x86_64)  echo "x86_64-apple-darwin" ;;
+                  arm64)   echo "aarch64-apple-darwin" ;;
+                  *) echo "Unsupported architecture: $arch" >&2; exit 1 ;;
+                esac
+                ;;
+              *) echo "Unsupported OS: $os" >&2; exit 1 ;;
+            esac
+          }
+
+          TARGET=$(detect_target)
+          ARCHIVE="owui-lint-${TARGET}.tar.gz"
+          URL="https://github.com/${REPO}/releases/latest/download/${ARCHIVE}"
+          INSTALL_DIR="${HOME}/.cargo/bin"
+
+          echo "Detected target: ${TARGET}"
+          echo "Downloading ${URL}..."
+
+          tmpdir=$(mktemp -d)
+          trap 'rm -rf "$tmpdir"' EXIT
+
+          curl --proto '=https' --tlsv1.2 -LsSf "$URL" -o "${tmpdir}/${ARCHIVE}"
+          tar xzf "${tmpdir}/${ARCHIVE}" -C "${tmpdir}"
+          install -d "${INSTALL_DIR}"
+          install "${tmpdir}/owui-lint" "${INSTALL_DIR}/owui-lint"
+
+          echo "Installed owui-lint to ${INSTALL_DIR}/owui-lint"
+          echo "Make sure ${INSTALL_DIR} is in your PATH."
+          SHELL_EOF
+
+          chmod +x dist/owui-lint-installer.sh
+
+          # --- powershell installer ---
+          cat > dist/owui-lint-installer.ps1 << 'PS_EOF'
+          $ErrorActionPreference = "Stop"
+
+          $repo = "christestet/owui-lint"
+
+          $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq "Arm64") {
+              "aarch64-pc-windows-msvc"
+          } else {
+              "x86_64-pc-windows-msvc"
+          }
+
+          $archive = "owui-lint-${arch}.zip"
+          $url = "https://github.com/${repo}/releases/latest/download/${archive}"
+          $installDir = Join-Path $env:USERPROFILE ".cargo\bin"
+
+          Write-Host "Detected target: $arch"
+          Write-Host "Downloading $url..."
+
+          $tmp = New-TemporaryFile | Rename-Item -NewName { $_.Name + ".zip" } -PassThru
+          try {
+              Invoke-WebRequest -Uri $url -OutFile $tmp.FullName
+              $extract = Join-Path ([System.IO.Path]::GetTempPath()) "owui-lint-extract"
+              Expand-Archive -Path $tmp.FullName -DestinationPath $extract -Force
+
+              if (-not (Test-Path $installDir)) { New-Item -ItemType Directory -Path $installDir | Out-Null }
+              Copy-Item (Join-Path $extract "owui-lint.exe") -Destination (Join-Path $installDir "owui-lint.exe") -Force
+
+              Write-Host "Installed owui-lint to $installDir\owui-lint.exe"
+              Write-Host "Make sure $installDir is in your PATH."
+          } finally {
+              Remove-Item $tmp.FullName -ErrorAction SilentlyContinue
+              Remove-Item $extract -Recurse -ErrorAction SilentlyContinue
+          }
+          PS_EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/owui-lint-*.tar.gz
+            dist/owui-lint-*.zip
+            dist/sha256-checksums.txt
+            dist/owui-lint-installer.sh
+            dist/owui-lint-installer.ps1

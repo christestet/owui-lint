@@ -24,15 +24,28 @@ flowchart LR
     D --> E["Output: text/json/github/sarif"]
 ```
 
-## Build
+## Install
+
+### Pre-built binaries (recommended)
+
+macOS / Linux:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/christestet/owui-lint/releases/latest/download/owui-lint-installer.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://github.com/christestet/owui-lint/releases/latest/download/owui-lint-installer.ps1 | iex
+```
+
+Or download a binary directly from the [Releases](https://github.com/christestet/owui-lint/releases/latest) page.
+
+### Build from source
 
 ```bash
 cargo build --release
-```
-
-Binary path:
-
-```bash
 ./target/release/owui-lint
 ```
 
@@ -99,6 +112,12 @@ Discover and explain rules:
 owui-lint rules
 owui-lint rules --format json --output owui-rules.json
 owui-lint explain OWT101
+```
+
+Update to the latest version:
+
+```bash
+owui-lint update
 ```
 
 Control exit behavior:
