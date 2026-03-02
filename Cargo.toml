@@ -1,6 +1,6 @@
 [package]
 name = "owui-lint"
-version = "0.0.1"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.93.1"
 description = "Rust CLI linter for Open WebUI extensions."
