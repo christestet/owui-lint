@@ -8,7 +8,7 @@
 
 - **Language:** Rust (single binary, no runtime dependencies)
 - **Config:** `owui-lint.yml` (see `owui-lint.example.yml` for schema)
-- **Source layout:** `src/` — `cli.rs` (arg parsing), `analysis.rs` (AST walks), `rules.rs` (lint rules), `linter.rs` (orchestration), `output.rs` (text/JSON/SARIF reporters), `config.rs`, `models.rs`
+- **Source layout:** `src/` — `cli.rs` (arg parsing), `analysis/` (AST walks: `mod.rs` orchestration, `syntax.rs` error detection, `parsing.rs` Python construct parsing), `rules.rs` (lint rules), `linter.rs` (orchestration), `output.rs` (text/JSON/SARIF reporters), `config.rs`, `models.rs`
 - **Tests:** `tests/` (integration), inline `#[cfg(test)]` (unit)
 
 ## How
