@@ -384,28 +384,28 @@ fn lint_filter(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
         )];
     }
 
-    if let Some(inlet) = inlet {
-        if !inlet.returns_body {
-            issues.push(issue(
-                OWF301,
-                path,
-                inlet.line,
-                inlet.column,
-                "Filter.inlet should return body.",
-            ));
-        }
+    if let Some(inlet) = inlet
+        && !inlet.returns_body
+    {
+        issues.push(issue(
+            OWF301,
+            path,
+            inlet.line,
+            inlet.column,
+            "Filter.inlet should return body.",
+        ));
     }
 
-    if let Some(outlet) = outlet {
-        if !outlet.returns_body {
-            issues.push(issue(
-                OWF302,
-                path,
-                outlet.line,
-                outlet.column,
-                "Filter.outlet should return body.",
-            ));
-        }
+    if let Some(outlet) = outlet
+        && !outlet.returns_body
+    {
+        issues.push(issue(
+            OWF302,
+            path,
+            outlet.line,
+            outlet.column,
+            "Filter.outlet should return body.",
+        ));
     }
 
     issues

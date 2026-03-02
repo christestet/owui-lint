@@ -119,15 +119,15 @@ fn parse_yaml_config(input: &str) -> std::result::Result<Config, String> {
             continue;
         }
 
-        if current_section == "rules" {
-            if let Some((key, value)) = split_key_value(line) {
-                let key = key.trim().to_ascii_uppercase();
-                if key.is_empty() {
-                    continue;
-                }
-                if let Some(severity) = SeverityOverride::parse(unquote(value.trim())) {
-                    config.rule_overrides.insert(key, severity);
-                }
+        if current_section == "rules"
+            && let Some((key, value)) = split_key_value(line)
+        {
+            let key = key.trim().to_ascii_uppercase();
+            if key.is_empty() {
+                continue;
+            }
+            if let Some(severity) = SeverityOverride::parse(unquote(value.trim())) {
+                config.rule_overrides.insert(key, severity);
             }
         }
     }

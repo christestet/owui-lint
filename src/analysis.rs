@@ -139,14 +139,13 @@ fn parse_module(path: &Path, source: &str) -> ModuleInfo {
 
                         set_function_returns_body(&mut module, &function_ctx.target, trimmed);
 
-                        if function_ctx.is_init_method {
-                            if let Some(class_index) = function_ctx.class_index {
-                                if let Some(name) = self_assignment_name(trimmed) {
-                                    module.classes[class_index]
-                                        .init_assignments
-                                        .insert(name.to_string());
-                                }
-                            }
+                        if function_ctx.is_init_method
+                            && let Some(class_index) = function_ctx.class_index
+                            && let Some(name) = self_assignment_name(trimmed)
+                        {
+                            module.classes[class_index]
+                                .init_assignments
+                                .insert(name.to_string());
                         }
                     }
                 }
