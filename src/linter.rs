@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use walkdir::WalkDir;
 
 use crate::analysis::analyze_file;
@@ -9,8 +9,8 @@ use crate::config::Config;
 use crate::glob::glob_match;
 use crate::models::{ClassInfo, Issue, LintSummary, ModuleInfo, Severity, SeverityOverride};
 use crate::rules::{
-    issue, OWA400, OWA401, OWF300, OWF301, OWF302, OWP200, OWP201, OWP202, OWPL500, OWPL501,
-    OWT100, OWT101, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021, OWUI022, OWUI030, OWUI031,
+    OWA400, OWA401, OWF300, OWF301, OWF302, OWP200, OWP201, OWP202, OWPL500, OWPL501, OWT100,
+    OWT101, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021, OWUI022, OWUI030, OWUI031, issue,
 };
 
 const EXTENSION_CLASSES: [(&str, &str); 5] = [
@@ -384,28 +384,28 @@ fn lint_filter(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
         )];
     }
 
-    if let Some(inlet) = inlet {
-        if !inlet.returns_body {
-            issues.push(issue(
-                OWF301,
-                path,
-                inlet.line,
-                inlet.column,
-                "Filter.inlet should return body.",
-            ));
-        }
+    if let Some(inlet) = inlet
+        && !inlet.returns_body
+    {
+        issues.push(issue(
+            OWF301,
+            path,
+            inlet.line,
+            inlet.column,
+            "Filter.inlet should return body.",
+        ));
     }
 
-    if let Some(outlet) = outlet {
-        if !outlet.returns_body {
-            issues.push(issue(
-                OWF302,
-                path,
-                outlet.line,
-                outlet.column,
-                "Filter.outlet should return body.",
-            ));
-        }
+    if let Some(outlet) = outlet
+        && !outlet.returns_body
+    {
+        issues.push(issue(
+            OWF302,
+            path,
+            outlet.line,
+            outlet.column,
+            "Filter.outlet should return body.",
+        ));
     }
 
     issues

@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::models::{Issue, LintSummary, Severity};
 use crate::rules::{all_rules, rule_doc};
@@ -292,15 +292,15 @@ fn sarif_level(severity: Severity) -> &'static str {
 
 fn to_relative_uri(path: &Path) -> String {
     let cwd = std::env::current_dir().ok();
-    if let Some(cwd) = cwd {
-        if let Ok(relative) = path.canonicalize().and_then(|absolute| {
+    if let Some(cwd) = cwd
+        && let Ok(relative) = path.canonicalize().and_then(|absolute| {
             absolute
                 .strip_prefix(&cwd)
                 .map(|value| value.to_path_buf())
                 .map_err(std::io::Error::other)
-        }) {
-            return relative.to_string_lossy().replace('\\', "/");
-        }
+        })
+    {
+        return relative.to_string_lossy().replace('\\', "/");
     }
     path.canonicalize()
         .unwrap_or_else(|_| PathBuf::from(path))
