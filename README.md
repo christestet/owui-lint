@@ -1,6 +1,8 @@
 # owui-lint
 
-![Rust](https://img.shields.io/badge/Rust-2021-000000?logo=rust&logoColor=white)
+![CI](https://github.com/christestet/owui-lint/actions/workflows/ci.yml/badge.svg)
+![Release](https://img.shields.io/github/v/release/christestet/owui-lint?label=release)
+![Rust](https://img.shields.io/badge/MSRV-1.93.1-000000?logo=rust&logoColor=white)
 ![license](https://img.shields.io/badge/license-MIT-blue.svg)
 
 > **Disclaimer:** `owui-lint` is a hobby project and is **not** developed or maintained by the
@@ -23,11 +25,16 @@
 - YAML config for lint rules (`config.yml` or `owui-lint.yml`)
 
 ```mermaid
-flowchart LR
-    A["CLI (Rust / clap)"] --> B["File Discovery"]
-    B --> C["Rust Analyzer"]
-    C --> D["Rule Engine"]
-    D --> E["Output: text/json/github/sarif"]
+flowchart TD
+    A["CLI (clap)"] --> B{Subcommand}
+    B -->|lint| C["Config Loader<br/>(config.rs)"]
+    B -->|rules / explain| G["Rule Catalog<br/>(rules.rs)"]
+    B -->|update| H["Self-Update<br/>(update.rs)"]
+    C --> D["File Discovery<br/>(walkdir + glob.rs)"]
+    D --> E["Python Analyzer<br/>(analysis.rs)"]
+    E --> F["Rule Engine<br/>(linter.rs + rules.rs)"]
+    F --> I["Output Formatter<br/>(output.rs)"]
+    I --> J["text / json / github / sarif"]
 ```
 
 ## Install
@@ -37,16 +44,30 @@ flowchart LR
 macOS / Linux:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/christestet/owui-lint/releases/latest/download/owui-lint-installer.sh | sh
+curl -fsSL https://raw.githubusercontent.com/christestet/owui-lint/main/scripts/install.sh | sh
 ```
 
 Windows (PowerShell):
 
 ```powershell
-irm https://github.com/christestet/owui-lint/releases/latest/download/owui-lint-installer.ps1 | iex
+irm https://raw.githubusercontent.com/christestet/owui-lint/main/scripts/install.ps1 | iex
 ```
 
 Or download a binary directly from the [Releases](https://github.com/christestet/owui-lint/releases/latest) page.
+
+### Uninstall
+
+macOS / Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/christestet/owui-lint/main/scripts/uninstall.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/christestet/owui-lint/main/scripts/uninstall.ps1 | iex
+```
 
 ### Build from source
 

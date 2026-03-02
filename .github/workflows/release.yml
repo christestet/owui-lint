@@ -101,97 +101,13 @@ jobs:
           sha256sum owui-lint-* > sha256-checksums.txt
           cat sha256-checksums.txt
 
-      - name: Generate installer scripts
+      - name: Copy installer scripts
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          REPO="christestet/owui-lint"
-
-          # --- shell installer ---
-          cat > dist/owui-lint-installer.sh << 'SHELL_EOF'
-          #!/bin/sh
-          set -eu
-
-          REPO="christestet/owui-lint"
-
-          detect_target() {
-            arch=$(uname -m)
-            os=$(uname -s)
-            case "$os" in
-              Linux)
-                case "$arch" in
-                  x86_64)  echo "x86_64-unknown-linux-gnu" ;;
-                  aarch64) echo "aarch64-unknown-linux-gnu" ;;
-                  *) echo "Unsupported architecture: $arch" >&2; exit 1 ;;
-                esac
-                ;;
-              Darwin)
-                case "$arch" in
-                  x86_64)  echo "x86_64-apple-darwin" ;;
-                  arm64)   echo "aarch64-apple-darwin" ;;
-                  *) echo "Unsupported architecture: $arch" >&2; exit 1 ;;
-                esac
-                ;;
-              *) echo "Unsupported OS: $os" >&2; exit 1 ;;
-            esac
-          }
-
-          TARGET=$(detect_target)
-          ARCHIVE="owui-lint-${TARGET}.tar.gz"
-          URL="https://github.com/${REPO}/releases/latest/download/${ARCHIVE}"
-          INSTALL_DIR="${HOME}/.cargo/bin"
-
-          echo "Detected target: ${TARGET}"
-          echo "Downloading ${URL}..."
-
-          tmpdir=$(mktemp -d)
-          trap 'rm -rf "$tmpdir"' EXIT
-
-          curl --proto '=https' --tlsv1.2 -LsSf "$URL" -o "${tmpdir}/${ARCHIVE}"
-          tar xzf "${tmpdir}/${ARCHIVE}" -C "${tmpdir}"
-          install -d "${INSTALL_DIR}"
-          install "${tmpdir}/owui-lint" "${INSTALL_DIR}/owui-lint"
-
-          echo "Installed owui-lint to ${INSTALL_DIR}/owui-lint"
-          echo "Make sure ${INSTALL_DIR} is in your PATH."
-          SHELL_EOF
-
-          chmod +x dist/owui-lint-installer.sh
-
-          # --- powershell installer ---
-          cat > dist/owui-lint-installer.ps1 << 'PS_EOF'
-          $ErrorActionPreference = "Stop"
-
-          $repo = "christestet/owui-lint"
-
-          $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq "Arm64") {
-              "aarch64-pc-windows-msvc"
-          } else {
-              "x86_64-pc-windows-msvc"
-          }
-
-          $archive = "owui-lint-${arch}.zip"
-          $url = "https://github.com/${repo}/releases/latest/download/${archive}"
-          $installDir = Join-Path $env:USERPROFILE ".cargo\bin"
-
-          Write-Host "Detected target: $arch"
-          Write-Host "Downloading $url..."
-
-          $tmp = New-TemporaryFile | Rename-Item -NewName { $_.Name + ".zip" } -PassThru
-          try {
-              Invoke-WebRequest -Uri $url -OutFile $tmp.FullName
-              $extract = Join-Path ([System.IO.Path]::GetTempPath()) "owui-lint-extract"
-              Expand-Archive -Path $tmp.FullName -DestinationPath $extract -Force
-
-              if (-not (Test-Path $installDir)) { New-Item -ItemType Directory -Path $installDir | Out-Null }
-              Copy-Item (Join-Path $extract "owui-lint.exe") -Destination (Join-Path $installDir "owui-lint.exe") -Force
-
-              Write-Host "Installed owui-lint to $installDir\owui-lint.exe"
-              Write-Host "Make sure $installDir is in your PATH."
-          } finally {
-              Remove-Item $tmp.FullName -ErrorAction SilentlyContinue
-              Remove-Item $extract -Recurse -ErrorAction SilentlyContinue
-          }
-          PS_EOF
+          cp scripts/install.sh dist/owui-lint-installer.sh
+          cp scripts/uninstall.sh dist/owui-lint-uninstaller.sh
+          cp scripts/install.ps1 dist/owui-lint-installer.ps1
+          cp scripts/uninstall.ps1 dist/owui-lint-uninstaller.ps1
+          chmod +x dist/owui-lint-installer.sh dist/owui-lint-uninstaller.sh
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -203,3 +119,5 @@ jobs:
             dist/sha256-checksums.txt
             dist/owui-lint-installer.sh
             dist/owui-lint-installer.ps1
+            dist/owui-lint-uninstaller.sh
+            dist/owui-lint-uninstaller.ps1
