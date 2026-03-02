@@ -5,6 +5,8 @@
 ![Rust](https://img.shields.io/badge/MSRV-1.93.1-000000?logo=rust&logoColor=white)
 ![license](https://img.shields.io/badge/license-MIT-blue.svg)
 
+> The **release** badge above always reflects the latest published GitHub release version automatically.
+
 > **Disclaimer:** `owui-lint` is a hobby project and is **not** developed or maintained by the
 > [Open WebUI](https://github.com/open-webui/open-webui) team. Thank you to the Open WebUI
 > maintainers for building an amazing platform. The rulesets in this tool are opinionated and
