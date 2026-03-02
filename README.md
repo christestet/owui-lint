@@ -33,7 +33,7 @@ flowchart TD
     B -->|rules / explain| G["Rule Catalog<br/>(rules.rs)"]
     B -->|update| H["Self-Update<br/>(update.rs)"]
     C --> D["File Discovery<br/>(walkdir + glob.rs)"]
-    D --> E["Python Analyzer<br/>(analysis.rs)"]
+    D --> E["Python Analyzer<br/>(analysis/)"]
     E --> F["Rule Engine<br/>(linter.rs + rules.rs)"]
     F --> I["Output Formatter<br/>(output.rs)"]
     I --> J["text / json / github / sarif"]
