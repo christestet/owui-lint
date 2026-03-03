@@ -68,146 +68,13 @@ When a user clicks an action button, the body contains:
 
 ## Using Event Emitters in Actions
 
-Actions primarily communicate results via `__event_emitter__`:
+Actions primarily communicate results via `__event_emitter__` (e.g., status updates, citations, or appending messages).
 
-### Send a text message back to chat
+👉 **See [development-common.md](development-common.md) for full examples of Status, Message, and Citation events.**
 
-```python
-await __event_emitter__({
-    "type": "message",
-    "data": {"content": "Here is the summary: ..."}
-})
-```
+## Full Example: Translate Action
 
-### Show processing status
-
-```python
-await __event_emitter__({
-    "type": "status",
-    "data": {"description": "Summarizing...", "done": False}
-})
-
-# ... do work ...
-
-await __event_emitter__({
-    "type": "status",
-    "data": {"description": "Done!", "done": True}
-})
-```
-
-### Add citations
-
-```python
-await __event_emitter__({
-    "type": "citation",
-    "data": {
-        "document": ["Source text..."],
-        "metadata": [{"source": "https://example.com"}],
-        "source": {"name": "Source Name", "url": "https://example.com"}
-    }
-})
-```
-
-## Full Example: Summarize Action
-
-```python
-from pydantic import BaseModel, Field
-from typing import Optional, Callable
-import requests
-
-class Action:
-    class Valves(BaseModel):
-        OPENAI_API_KEY: str = Field(default="", description="OpenAI API key for summarization")
-        OPENAI_BASE_URL: str = Field(
-            default="https://api.openai.com/v1",
-            description="OpenAI API base URL"
-        )
-        SUMMARY_MODEL: str = Field(default="gpt-4o-mini", description="Model to use for summaries")
-        MAX_SUMMARY_LENGTH: int = Field(default=150, description="Target summary length in words")
-
-    def __init__(self):
-        self.valves = self.Valves()
-
-    async def action(
-        self,
-        body: dict,
-        __user__: Optional[dict] = None,
-        __event_emitter__: Callable = None,
-    ) -> Optional[dict]:
-        """Summarize the clicked message."""
-        
-        messages = body.get("messages", [])
-        if not messages:
-            return
-        
-        # Get the message to summarize
-        target_message = messages[-1].get("content", "")
-        
-        if not target_message:
-            if __event_emitter__:
-                await __event_emitter__({
-                    "type": "message",
-                    "data": {"content": "No content to summarize."}
-                })
-            return
-        
-        # Show processing status
-        if __event_emitter__:
-            await __event_emitter__({
-                "type": "status",
-                "data": {"description": "Generating summary...", "done": False}
-            })
-        
-        try:
-            # Call OpenAI API for summarization
-            headers = {
-                "Authorization": f"Bearer {self.valves.OPENAI_API_KEY}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "model": self.valves.SUMMARY_MODEL,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": f"Summarize the following text in approximately {self.valves.MAX_SUMMARY_LENGTH} words. Be concise and capture the key points."
-                    },
-                    {"role": "user", "content": target_message}
-                ],
-                "max_tokens": 500,
-            }
-            
-            r = requests.post(
-                f"{self.valves.OPENAI_BASE_URL}/chat/completions",
-                json=payload,
-                headers=headers,
-            )
-            r.raise_for_status()
-            
-            summary = r.json()["choices"][0]["message"]["content"]
-            
-            if __event_emitter__:
-                await __event_emitter__({
-                    "type": "message",
-                    "data": {"content": f"**Summary:**\n\n{summary}"}
-                })
-                await __event_emitter__({
-                    "type": "status",
-                    "data": {"description": "Summary complete!", "done": True}
-                })
-        
-        except Exception as e:
-            if __event_emitter__:
-                await __event_emitter__({
-                    "type": "message",
-                    "data": {"content": f"Error generating summary: {e}"}
-                })
-                await __event_emitter__({
-                    "type": "status",
-                    "data": {"description": "Error", "done": True}
-                })
-```
-
-## Full Example: Simple Translate Action (No External API)
+This example adds a translation button. Instead of calling an external API, it intercepts the click, modifies the request body to ask the current model for a translation, and returns the modified body to Open WebUI to process.
 
 ```python
 from pydantic import BaseModel, Field
@@ -223,41 +90,39 @@ class Action:
     async def action(
         self,
         body: dict,
-        __user__: Optional[dict] = None,
         __event_emitter__: Callable = None,
     ) -> Optional[dict]:
         """Translate the clicked message using the current model."""
-        
         messages = body.get("messages", [])
-        if not messages:
-            return
-        
+        if not messages: return
+
         target_message = messages[-1].get("content", "")
         
         if __event_emitter__:
-            await __event_emitter__({
-                "type": "status",
-                "data": {"description": f"Translating to {self.valves.TARGET_LANGUAGE}...", "done": False}
-            })
+            await __event_emitter__({"type": "status", "data": {"description": f"Translating to {self.valves.TARGET_LANGUAGE}...", "done": False}})
         
-        # Instead of calling an external API, we modify the body to ask
-        # the current model to translate. Return the modified body.
+        # Modify the body to ask the current model to translate
         body["messages"] = [
-            {
-                "role": "system",
-                "content": f"Translate the following text to {self.valves.TARGET_LANGUAGE}. Only output the translation, nothing else."
-            },
+            {"role": "system", "content": f"Translate the following text to {self.valves.TARGET_LANGUAGE}. Only output the translation, nothing else."},
             {"role": "user", "content": target_message}
         ]
         
         if __event_emitter__:
-            await __event_emitter__({
-                "type": "status",
-                "data": {"description": "Done!", "done": True}
-            })
+            await __event_emitter__({"type": "status", "data": {"description": "Done!", "done": True}})
         
         return body
 ```
+
+## Source Code Reference
+
+For exact runtime behavior — how `action()` is invoked, which reserved args are injected, sub-action routing (`action_id.sub_action_id`), and Rich UI embed processing — see **`actions.py`** in this references directory. Key details:
+
+- Reserved args injected: `__model__`, `__id__`, `__event_emitter__`, `__event_call__`, `__request__`
+- `__user__` is passed as a dict (via `user.model_dump()`), with `UserValves` merged in if defined
+- Both sync and async `action()` are supported (detected via `inspect.iscoroutinefunction`)
+- Action results are processed through `process_tool_result` for Rich UI embeds
+
+---
 
 ## Installation & Activation
 

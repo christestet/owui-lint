@@ -19,14 +19,26 @@ Before writing any code, read the appropriate reference file:
 | Filter Function | `references/filter-functions.md` | User wants to modify input/output of existing models |
 | Action Function | `references/action-functions.md` | User wants custom buttons on chat messages |
 | Pipeline | `references/pipelines.md` | User needs external server processing |
-| Valves & Events | `references/development-common.md` | Always read — covers Valves, Events, Reserved Args, Rich UI |
+| Valves & UserValves | `references/valves.md` | Defining configurable settings (admin Valves, per-user UserValves, input types, dynamic options) |
+| Valves, Events & Reserved Args | `references/development-common.md` | Always read — covers Valves, Events, Reserved Args, Rich UI |
 | Pitfalls & Troubleshooting | `references/pitfalls-and-troubleshooting.md` | Always read — covers common mistakes, debugging, model compatibility |
+
+### Source Code References (Open WebUI Backend)
+
+These are actual Python source files from the Open WebUI codebase. Read them when you need exact function signatures, parameter handling, class detection, or runtime behavior.
+
+| Source File | What It Covers | When to Read |
+|---|---|---|
+| `references/plugin.py` | Module loading (`load_function_module_by_id`, `load_tool_module_by_id`), frontmatter extraction, import replacement, Valves schema resolution, caching | Understanding how extensions are loaded, how class names (`Pipe`/`Filter`/`Action`/`Tools`) are detected, how frontmatter requirements work |
+| `references/tools.py` | Tool execution (`get_tools`), built-in tools (`get_builtin_tools`), spec generation, tool server integration, access control | Understanding tool loading, function-to-spec conversion, reserved parameter injection (`__user__`, `__event_emitter__`, etc.) |
+| `references/filter.py` | Filter processing (`process_filter_functions`), filter ordering/priority, inlet/outlet/stream handler execution | Understanding how filters are chained, how `inlet()`/`outlet()` are called, `file_handler` behavior |
+| `references/actions.py` | Action execution (`chat_action`), sub-action routing, event emitter/call setup | Understanding how `action()` is invoked, which reserved args are passed, Rich UI embed processing |
 
 **ALWAYS read `references/development-common.md` AND `references/pitfalls-and-troubleshooting.md` in addition to the type-specific reference.** The common reference contains critical information about Valves, Events, Reserved Args, and Rich UI. The pitfalls reference covers the most frequently encountered issues (wrong class names, silent failures, streaming hangs, tool calling problems) and their solutions — reading it before coding prevents most debugging sessions.
 
-#### Official Documentation URLs
+#### Official Documentation & Source URLs
 
-If the local reference files lack detail for an edge case, or if you need to verify against the latest API, fetch the relevant official doc. **Use local references first** — only fetch URLs when you need additional depth or the latest changes.
+If the local reference files lack detail for an edge case, or if you need to verify against the latest API, fetch the relevant official doc or source file. **Use local references first** — only fetch URLs when you need additional depth.
 
 | Topic | URL |
 |-------|-----|
@@ -42,34 +54,30 @@ If the local reference files lack detail for an edge case, or if you need to ver
 | Events (event_emitter, event_call) | https://docs.openwebui.com/features/extensibility/plugin/development/events |
 | Valves & UserValves | https://docs.openwebui.com/features/extensibility/plugin/development/valves |
 | Rich UI Embedding | https://docs.openwebui.com/features/extensibility/plugin/development/rich-ui |
-| Reserved Args (__user__, __request__, ...) | https://docs.openwebui.com/features/extensibility/plugin/development/reserved-args |
+| Reserved Args (__user__, __request__) | https://docs.openwebui.com/features/extensibility/plugin/development/reserved-args |
 | **Pipelines** | |
 | Pipelines overview | https://docs.openwebui.com/features/extensibility/pipelines/ |
 | Pipelines: Pipes | https://docs.openwebui.com/features/extensibility/pipelines/pipes |
 | Pipelines: Valves | https://docs.openwebui.com/features/extensibility/pipelines/valves |
 | Pipelines examples (GitHub) | https://github.com/open-webui/pipelines/tree/main/examples/pipelines |
+| **Source Code References (GitHub)** | |
+| Functions parsing module | https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/functions.py |
+| Functions Pydantic model | https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/models/functions.py |
+| Tools Pydantic model | https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/models/tools.py |
+| Pipelines main code | https://raw.githubusercontent.com/open-webui/pipelines/refs/heads/main/main.py |
 | **Other** | |
 | Troubleshooting | https://docs.openwebui.com/troubleshooting/ |
 
-### Common Pitfalls
+### Implementation Principles
 
-Before writing code, review `references/pitfalls-and-troubleshooting.md` for the extension type you're building. The most critical pitfalls to avoid are:
+Before writing code, ALWAYS review `references/pitfalls-and-troubleshooting.md`. It covers the most frequently encountered issues and reading it upfront prevents most debugging sessions. 
 
-- **Wrong class name** — `class Pipe:` vs `class Filter:` vs `class Tools:` determines behavior entirely
-- **Filters not returning body** — `inlet()` and `outlet()` MUST return the body dict
-- **Missing tool docstrings** — without descriptive docstrings, LLMs will never call your tool
-- **Synchronous HTTP in async functions** — blocks the entire server, use `aiohttp` instead
-- **Silent import failures** — missing dependencies don't show errors in the UI, check Docker logs
-- **Streaming hangs** — AsyncGenerators can hang the UI, prefer `requests` with `stream=True` + `iter_lines()`
+Follow these core implementation principles:
 
-Follow these implementation principles:
-
-1. **Use async functions** — Open WebUI is moving toward fully async execution. Define `pipe()`, `inlet()`, `outlet()`, `action()` as `async` unless there is a specific reason not to.
-2. **Always include Valves** — Even simple extensions benefit from configurable parameters. Put API keys, URLs, and tunable settings in Valves.
-3. **Handle errors gracefully** — Use try/except blocks. Return meaningful error messages to the user.
-4. **Never hard-code secrets** — Use Valves for API keys and sensitive configuration.
-5. **Include docstrings and comments** — The code will be reviewed by admins before deployment.
-6. **Follow the class structure order** — Valves → `__init__` → main function(s).
+1. **Use async functions** — Define `pipe()`, `inlet()`, `outlet()`, `action()` as `async`. However, when making HTTP calls inside them, use `aiohttp`. Only use synchronous `requests` for streaming (`stream=True` + `iter_lines()`).
+2. **Handle errors gracefully** — Use try/except blocks. Return meaningful error messages to the user.
+3. **Include docstrings and comments** — Especially for Tools, as the LLM relies entirely on the docstring to know how to use it.
+4. **Follow the class structure order** — Valves → UserValves → `__init__` → main function(s).
 
 ## Quick Reference: Extension Types Summary
 

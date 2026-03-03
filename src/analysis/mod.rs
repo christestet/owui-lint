@@ -11,7 +11,7 @@ use crate::util::count_indent;
 use parsing::{
     collect_function_signature, extract_module_docstring, is_docstring_line, is_function_start,
     parse_class_definition, parse_function_definition, parse_import, parse_import_from,
-    returns_body, self_assignment_name,
+    parse_valve_fields, returns_body, self_assignment_name,
 };
 use syntax::detect_syntax_error;
 
@@ -196,7 +196,20 @@ fn parse_module(path: &Path, source: &str) -> ModuleInfo {
         line_idx += 1;
     }
 
+    extract_valve_fields_for_classes(&mut module, &lines);
+
     module
+}
+
+fn extract_valve_fields_for_classes(module: &mut ModuleInfo, lines: &[&str]) {
+    for class in &mut module.classes {
+        for nested in &mut class.inner_classes {
+            if nested.name == "Valves" || nested.name == "UserValves" {
+                let class_line_idx = nested.line.saturating_sub(1);
+                nested.fields = parse_valve_fields(lines, class_line_idx);
+            }
+        }
+    }
 }
 
 fn handle_class_definition(
@@ -213,7 +226,12 @@ fn handle_class_definition(
     if let Some(parent_index) = current_top_level_class_index(contexts) {
         module.classes[parent_index]
             .inner_classes
-            .push(NestedClassInfo { name, bases });
+            .push(NestedClassInfo {
+                name,
+                bases,
+                line: line_no,
+                fields: Vec::new(),
+            });
         contexts.push(Context::Class(ClassContext {
             indent,
             class_index: None,

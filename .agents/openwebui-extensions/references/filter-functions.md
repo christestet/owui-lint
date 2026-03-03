@@ -61,95 +61,23 @@ async def inlet(self, body: dict, __user__: Optional[dict] = None) -> dict:
     return body  # ALWAYS return body
 ```
 
-### Common Inlet Patterns
+### Common Patterns
 
-**Add system instructions:**
+**Validate input length (Inlet):**
 ```python
 async def inlet(self, body: dict, __user__: Optional[dict] = None) -> dict:
-    context = f"Current user: {__user__.get('name', 'Unknown')}. Current time: {datetime.now()}"
-    body["messages"].insert(0, {"role": "system", "content": context})
+    if messages := body.get("messages", []):
+        if len(messages[-1].get("content", "")) > self.valves.MAX_LENGTH:
+            raise Exception("Message too long.")
     return body
 ```
 
-**Validate input length:**
-```python
-async def inlet(self, body: dict, __user__: Optional[dict] = None) -> dict:
-    messages = body.get("messages", [])
-    if messages:
-        last_msg = messages[-1].get("content", "")
-        if len(last_msg) > self.valves.MAX_INPUT_LENGTH:
-            raise Exception(f"Message too long. Max {self.valves.MAX_INPUT_LENGTH} characters.")
-    return body
-```
-
-**Inject RAG context:**
-```python
-async def inlet(self, body: dict, __user__: Optional[dict] = None) -> dict:
-    messages = body.get("messages", [])
-    if messages:
-        user_query = messages[-1]["content"]
-        # Fetch relevant documents
-        context = await self.search_documents(user_query)
-        # Augment the message
-        messages[-1]["content"] = f"Context:\n{context}\n\nUser question: {user_query}"
-    body["messages"] = messages
-    return body
-```
-
-## The `outlet` Function
-
-The outlet intercepts the response **after** the model generates it. Use it to modify, format, or enrich the output.
-
-### Important: `outlet` MUST return the body dict
-
+**Clean output (Outlet):**
 ```python
 async def outlet(self, body: dict, __user__: Optional[dict] = None) -> dict:
-    messages = body.get("messages", [])
-    
-    # Modify the last assistant message
-    if messages and messages[-1]["role"] == "assistant":
-        content = messages[-1]["content"]
-        # Example: Add a disclaimer footer
-        messages[-1]["content"] = content + "\n\n---\n*This response was AI-generated.*"
-    
-    body["messages"] = messages
-    return body  # ALWAYS return body
-```
-
-### Common Outlet Patterns
-
-**Format output:**
-```python
-async def outlet(self, body: dict, __user__: Optional[dict] = None) -> dict:
-    messages = body.get("messages", [])
-    if messages and messages[-1]["role"] == "assistant":
-        content = messages[-1]["content"]
-        # Clean up extra whitespace
-        content = "\n".join(line.strip() for line in content.split("\n"))
-        messages[-1]["content"] = content
-    body["messages"] = messages
-    return body
-```
-
-**Log conversations:**
-```python
-async def outlet(self, body: dict, __user__: Optional[dict] = None) -> dict:
-    messages = body.get("messages", [])
-    if messages:
-        user_id = __user__.get("id", "unknown") if __user__ else "unknown"
-        print(f"[LOG] User {user_id}: {len(messages)} messages exchanged")
-    return body
-```
-
-**Translate output:**
-```python
-async def outlet(self, body: dict, __user__: Optional[dict] = None) -> dict:
-    messages = body.get("messages", [])
-    if messages and messages[-1]["role"] == "assistant":
-        content = messages[-1]["content"]
-        translated = await self.translate(content, target_lang=self.valves.TARGET_LANG)
-        messages[-1]["content"] = translated
-    body["messages"] = messages
+    if messages := body.get("messages", []):
+        if messages[-1]["role"] == "assistant":
+            messages[-1]["content"] = messages[-1]["content"].strip()
     return body
 ```
 
@@ -158,58 +86,34 @@ async def outlet(self, body: dict, __user__: Optional[dict] = None) -> dict:
 ```python
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime
 
 class Filter:
     class Valves(BaseModel):
         priority: int = Field(default=0, description="Filter priority (lower = first)")
-        SYSTEM_PROMPT: str = Field(
-            default="You are a helpful assistant. Be concise and accurate.",
-            description="System prompt to inject into every conversation"
-        )
-        ADD_TIMESTAMP: bool = Field(default=True, description="Add timestamp to context")
-        ADD_DISCLAIMER: bool = Field(default=True, description="Add disclaimer to output")
-        DISCLAIMER_TEXT: str = Field(
-            default="\n\n---\n*AI-generated response. Verify important information.*",
-            description="Disclaimer text to append to responses"
-        )
+        SYSTEM_PROMPT: str = Field(default="You are a helpful assistant.", description="System prompt to inject")
 
     def __init__(self):
         self.valves = self.Valves()
 
     async def inlet(self, body: dict, __user__: Optional[dict] = None) -> dict:
-        """Inject system prompt and context before model processing."""
+        """Inject system prompt before model processing."""
         messages = body.get("messages", [])
+        system_content = f"{self.valves.SYSTEM_PROMPT}\nUser: {__user__.get('name', '') if __user__ else 'Unknown'}"
         
-        # Build system message
-        system_parts = [self.valves.SYSTEM_PROMPT]
-        
-        if self.valves.ADD_TIMESTAMP:
-            system_parts.append(f"Current date/time: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        
-        if __user__:
-            system_parts.append(f"User: {__user__.get('name', 'Unknown')}")
-        
-        system_content = "\n".join(system_parts)
-        
-        # Insert or replace system message
         if messages and messages[0]["role"] == "system":
             messages[0]["content"] = system_content
         else:
             messages.insert(0, {"role": "system", "content": system_content})
-        
+            
         body["messages"] = messages
         return body
 
     async def outlet(self, body: dict, __user__: Optional[dict] = None) -> dict:
         """Add disclaimer to model output."""
-        if not self.valves.ADD_DISCLAIMER:
-            return body
-        
         messages = body.get("messages", [])
         if messages and messages[-1]["role"] == "assistant":
-            messages[-1]["content"] += self.valves.DISCLAIMER_TEXT
-        
+            messages[-1]["content"] += "\n\n*AI-generated response.*"
+            
         body["messages"] = messages
         return body
 ```
@@ -227,6 +131,20 @@ When multiple filters are active, the `priority` valve controls execution order:
 class Valves(BaseModel):
     priority: int = Field(default=0, description="Filter priority")
 ```
+
+## Source Code Reference
+
+For exact runtime behavior — how filters are chained, priority sorting, handler dispatch — see **`filter.py`** in this references directory. Key details:
+
+- Filters are sorted by `(priority, filter_id)` via `get_sorted_filter_ids()`
+- Three handler types: `inlet`, `outlet`, `stream` (stream handlers skip DB reload for performance)
+- Handler receives `body` as param name for inlet/outlet, `event` for stream
+- Reserved args (`__id__`, `__user__`, etc.) are injected only if present in the handler signature
+- `file_handler` attribute: if set on the filter module and handler is `inlet`, file metadata is removed from the body after processing
+- Valves are loaded from DB and applied before each filter runs
+- Both sync and async handlers are supported
+
+---
 
 ## Installation & Activation
 

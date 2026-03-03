@@ -29,5 +29,5 @@ Read these **on demand** when the task requires domain knowledge — do not load
 
 | Topic | Path | When to read |
 |---|---|---|
-| Open WebUI extension specs | `.agents/openwebui-extensions/SKILL.md` | Adding/modifying lint rules for extension types |
+| Open WebUI extension specs & source | `.agents/openwebui-extensions/SKILL.md` | Adding/modifying lint rules for extension types. Includes markdown references AND Python source code from the Open WebUI backend (`plugin.py`, `tools.py`, `filter.py`, `actions.py`) for exact function signatures and runtime behavior. |
 | Rust anti-patterns | `.agents/skills/rust-antipatterns/SKILL.md` | Writing or reviewing Rust implementation code |

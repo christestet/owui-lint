@@ -28,20 +28,22 @@ pub const OWUI021: &str = "OWUI021";
 pub const OWUI022: &str = "OWUI022";
 pub const OWT100: &str = "OWT100";
 pub const OWT101: &str = "OWT101";
+pub const OWT102: &str = "OWT102";
 pub const OWP200: &str = "OWP200";
 pub const OWP201: &str = "OWP201";
 pub const OWP202: &str = "OWP202";
 pub const OWF300: &str = "OWF300";
 pub const OWF301: &str = "OWF301";
-pub const OWF302: &str = "OWF302";
 pub const OWA400: &str = "OWA400";
 pub const OWA401: &str = "OWA401";
 pub const OWPL500: &str = "OWPL500";
 pub const OWPL501: &str = "OWPL501";
+pub const OWUI023: &str = "OWUI023";
 pub const OWUI030: &str = "OWUI030";
 pub const OWUI031: &str = "OWUI031";
+pub const OWUI032: &str = "OWUI032";
 
-const RULES: [RuleDoc; 20] = [
+const RULES: &[RuleDoc] = &[
     RuleDoc {
         id: OWUI001,
         default_severity: Severity::Error,
@@ -91,6 +93,14 @@ const RULES: [RuleDoc; 20] = [
         help_url: VALVES_DOC,
     },
     RuleDoc {
+        id: OWUI023,
+        default_severity: Severity::Warning,
+        title: "Sensitive valve field not masked",
+        summary: "A Valves field name suggests sensitive data (API key, token, password) but does not use the password input type to mask UI display.",
+        remediation: "Add `json_schema_extra={\"input\": {\"type\": \"password\"}}` to the Field() definition.",
+        help_url: "https://docs.openwebui.com/features/extensibility/plugin/development/valves#input-types",
+    },
+    RuleDoc {
         id: OWT100,
         default_severity: Severity::Error,
         title: "No public tool methods",
@@ -104,6 +114,14 @@ const RULES: [RuleDoc; 20] = [
         title: "Tool method missing docstring",
         summary: "Tool methods should include clear docstrings so users understand capabilities.",
         remediation: "Add a descriptive docstring to each public tool method.",
+        help_url: TOOLS_DOC,
+    },
+    RuleDoc {
+        id: OWT102,
+        default_severity: Severity::Warning,
+        title: "Tool method should be async",
+        summary: "Tool methods should be async; Open WebUI calls them in an async context and type-hints generate JSON schemas for the model.",
+        remediation: "Use `async def method_name(...)` for all public tool methods.",
         help_url: TOOLS_DOC,
     },
     RuleDoc {
@@ -147,14 +165,6 @@ const RULES: [RuleDoc; 20] = [
         help_url: FILTER_DOC,
     },
     RuleDoc {
-        id: OWF302,
-        default_severity: Severity::Warning,
-        title: "outlet should return body",
-        summary: "`Filter.outlet` should return the transformed response body.",
-        remediation: "Return `body` (or the modified body) from `outlet`.",
-        help_url: FILTER_DOC,
-    },
-    RuleDoc {
         id: OWA400,
         default_severity: Severity::Error,
         title: "Action method missing",
@@ -174,8 +184,8 @@ const RULES: [RuleDoc; 20] = [
         id: OWPL500,
         default_severity: Severity::Error,
         title: "Pipeline missing processing hook",
-        summary: "Pipeline extension must define either `pipe` (pipe type) or filter hooks (`inlet`/`outlet`/`stream`).",
-        remediation: "Add `pipe`, or define filter hooks (`inlet`, `outlet`, or `stream`) for filter-style pipelines.",
+        summary: "Pipeline extension must define `pipe` (pipe type), `pipes` (manifold type), or filter hooks (`inlet`/`outlet`/`stream`).",
+        remediation: "Add `pipe` for a standard pipeline, `pipes` for a manifold returning multiple models, or filter hooks for a filter-type pipeline.",
         help_url: PIPELINES_DOC,
     },
     RuleDoc {
@@ -202,10 +212,18 @@ const RULES: [RuleDoc; 20] = [
         remediation: "Pin each package, e.g. change `llama-index` to `llama-index==0.1.2`.",
         help_url: PLUGIN_OVERVIEW,
     },
+    RuleDoc {
+        id: OWUI032,
+        default_severity: Severity::Warning,
+        title: "Missing title in module header",
+        summary: "The module docstring header does not include a `title:` field, which Open WebUI uses as the display name in the UI.",
+        remediation: "Add `title: My Extension Name` to the module docstring.",
+        help_url: PLUGIN_OVERVIEW,
+    },
 ];
 
 pub fn all_rules() -> &'static [RuleDoc] {
-    &RULES
+    RULES
 }
 
 pub fn rule_doc(rule_id: &str) -> Option<&'static RuleDoc> {

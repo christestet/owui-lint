@@ -72,24 +72,27 @@ if grep -q "pub const ${RULE_ID}:" "${RULES_FILE}" || grep -q "id: ${RULE_ID}," 
 fi
 
 TMP_FILE="$(mktemp)"
-awk -v new_const="pub const ${RULE_ID}: &str = \"${RULE_ID}\";" '
-  /^const RULES: / && !inserted {
-    print new_const
-    inserted = 1
-  }
-  { print }
-' "${RULES_FILE}" > "${TMP_FILE}"
-mv "${TMP_FILE}" "${RULES_FILE}"
-
-TMP_FILE="$(mktemp)"
 awk \
+  -v new_const="pub const ${RULE_ID}: &str = \"${RULE_ID}\";" \
   -v rule_id="${RULE_ID}" \
   -v severity="${SEVERITY}" \
   -v title="${TITLE_ESCAPED}" \
   -v help_url_expr="${HELP_URL_EXPR}" \
 '
-  /^const RULES: / { in_rules = 1 }
-  in_rules && /^];$/ && !inserted {
+  /^const RULES:/ && !const_inserted {
+    print new_const
+    const_inserted = 1
+    in_rules = 1
+    # If fixed-size array [RuleDoc; N], increment N
+    if ($0 ~ /\[RuleDoc; [0-9]+\]/) {
+      n = $0
+      sub(/.*\[RuleDoc; /, "", n)
+      sub(/\].*/, "", n)
+      new_n = n + 1
+      sub(/\[RuleDoc; [0-9]+\]/, "[RuleDoc; " new_n "]")
+    }
+  }
+  in_rules && /^];$/ && !entry_inserted {
     print "    RuleDoc {"
     print "        id: " rule_id ","
     print "        default_severity: " severity ","
@@ -98,7 +101,7 @@ awk \
     print "        remediation: \"TODO: describe the fix users should apply.\","
     print "        help_url: " help_url_expr ","
     print "    },"
-    inserted = 1
+    entry_inserted = 1
   }
   { print }
 ' "${RULES_FILE}" > "${TMP_FILE}"

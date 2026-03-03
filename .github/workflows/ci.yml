@@ -40,3 +40,6 @@ jobs:
 
       - name: Test
         run: cargo test --locked
+
+      - name: Script tests
+        run: make test-scripts

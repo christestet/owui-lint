@@ -190,6 +190,203 @@ fn pinned_requirements_and_version_no_owui030_031() {
     assert!(!issues.iter().any(|issue| issue.rule_id == "OWUI031"));
 }
 
+#[test]
+fn sync_tool_method_warns_owt102() {
+    let temp = TempDir::new("owt102");
+    let file_path = temp.write(
+        "tools.py",
+        "from pydantic import BaseModel\n\nclass Tools:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    def search(self, query: str) -> str:\n        \"\"\"Searches for something.\"\"\"\n        return query\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWT102" && issue.severity == Severity::Warning)
+    );
+}
+
+#[test]
+fn async_tool_method_does_not_warn_owt102() {
+    let temp = TempDir::new("owt102_async");
+    let file_path = temp.write(
+        "tools.py",
+        "from pydantic import BaseModel\n\nclass Tools:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def search(self, query: str) -> str:\n        \"\"\"Searches for something.\"\"\"\n        return query\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(!issues.iter().any(|issue| issue.rule_id == "OWT102"));
+}
+
+#[test]
+fn missing_title_in_header_warns_owui032() {
+    let temp = TempDir::new("owui032");
+    let file_path = temp.write(
+        "tools.py",
+        "\"\"\"\nversion: 0.1.0\n\"\"\"\nfrom pydantic import BaseModel\n\nclass Tools:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def do_thing(self, x: str) -> str:\n        \"\"\"Does a thing.\"\"\"\n        return x\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWUI032" && issue.severity == Severity::Warning)
+    );
+}
+
+#[test]
+fn pipeline_with_pipes_method_does_not_raise_owpl500() {
+    let temp = TempDir::new("pipeline_manifold");
+    let file_path = temp.write(
+        "pipeline.py",
+        "from pydantic import BaseModel\n\nclass Pipeline:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.name = \"Manifold\"\n        self.valves = self.Valves()\n\n    def pipes(self) -> list:\n        return [{\"id\": \"model-a\", \"name\": \"Model A\"}]\n\n    async def pipe(self, user_message, model_id, messages, body):\n        return user_message\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(!issues.iter().any(|issue| issue.rule_id == "OWPL500"));
+}
+
+#[test]
+fn filter_outlet_without_return_body_does_not_warn() {
+    let temp = TempDir::new("owf302_removed");
+    let file_path = temp.write(
+        "filter.py",
+        "from pydantic import BaseModel\n\nclass Filter:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def inlet(self, body: dict) -> dict:\n        return body\n\n    async def outlet(self, body: dict) -> None:\n        pass\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(!issues.iter().any(|issue| issue.rule_id == "OWF302"));
+}
+
+#[test]
+fn sensitive_valve_field_without_password_type_warns_owui023() {
+    let temp = TempDir::new("owui023_basic");
+    let file_path = temp.write(
+        "tools.py",
+        "\"\"\"\ntitle: My Tool\nversion: 0.1.0\n\"\"\"\nfrom pydantic import BaseModel, Field\n\nclass Tools:\n    class Valves(BaseModel):\n        api_key: str = \"\"\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def do_thing(self, x: str) -> str:\n        \"\"\"Does a thing.\"\"\"\n        return x\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWUI023" && issue.severity == Severity::Warning),
+        "Expected OWUI023 for unmasked api_key field, got: {issues:?}"
+    );
+}
+
+#[test]
+fn sensitive_valve_field_with_password_type_no_owui023() {
+    let temp = TempDir::new("owui023_masked");
+    let file_path = temp.write(
+        "tools.py",
+        "\"\"\"\ntitle: My Tool\nversion: 0.1.0\n\"\"\"\nfrom pydantic import BaseModel, Field\n\nclass Tools:\n    class Valves(BaseModel):\n        api_key: str = Field(\n            default=\"\",\n            json_schema_extra={\"input\": {\"type\": \"password\"}}\n        )\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def do_thing(self, x: str) -> str:\n        \"\"\"Does a thing.\"\"\"\n        return x\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        !issues.iter().any(|issue| issue.rule_id == "OWUI023"),
+        "Should not warn when password type is set, got: {issues:?}"
+    );
+}
+
+#[test]
+fn non_sensitive_valve_field_no_owui023() {
+    let temp = TempDir::new("owui023_nonsensitive");
+    let file_path = temp.write(
+        "tools.py",
+        "\"\"\"\ntitle: My Tool\nversion: 0.1.0\n\"\"\"\nfrom pydantic import BaseModel\n\nclass Tools:\n    class Valves(BaseModel):\n        base_url: str = \"https://example.com\"\n        max_retries: int = 3\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def do_thing(self, x: str) -> str:\n        \"\"\"Does a thing.\"\"\"\n        return x\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        !issues.iter().any(|issue| issue.rule_id == "OWUI023"),
+        "Non-sensitive fields should not trigger OWUI023, got: {issues:?}"
+    );
+}
+
+#[test]
+fn uppercase_sensitive_valve_field_warns_owui023() {
+    let temp = TempDir::new("owui023_upper");
+    let file_path = temp.write(
+        "tools.py",
+        "\"\"\"\ntitle: My Tool\nversion: 0.1.0\n\"\"\"\nfrom pydantic import BaseModel\n\nclass Tools:\n    class Valves(BaseModel):\n        OPENAI_API_KEY: str = \"\"\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def do_thing(self, x: str) -> str:\n        \"\"\"Does a thing.\"\"\"\n        return x\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWUI023" && issue.severity == Severity::Warning),
+        "Expected OWUI023 for OPENAI_API_KEY, got: {issues:?}"
+    );
+}
+
+#[test]
+fn mixed_compliance_valve_fields_only_warns_unmasked() {
+    let temp = TempDir::new("owui023_mixed");
+    let file_path = temp.write(
+        "tools.py",
+        "\"\"\"\ntitle: My Tool\nversion: 0.1.0\n\"\"\"\nfrom pydantic import BaseModel, Field\n\nclass Tools:\n    class Valves(BaseModel):\n        api_key: str = Field(default=\"\", json_schema_extra={\"input\": {\"type\": \"password\"}})\n        secret_token: str = \"\"\n        base_url: str = \"https://example.com\"\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def do_thing(self, x: str) -> str:\n        \"\"\"Does a thing.\"\"\"\n        return x\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    let owui023_issues: Vec<_> = issues
+        .iter()
+        .filter(|issue| issue.rule_id == "OWUI023")
+        .collect();
+    assert_eq!(
+        owui023_issues.len(),
+        1,
+        "Expected exactly 1 OWUI023 (for secret_token), got: {owui023_issues:?}"
+    );
+    assert!(
+        owui023_issues[0].message.contains("secret_token"),
+        "OWUI023 should be for secret_token, got: {}",
+        owui023_issues[0].message
+    );
+}
+
 struct TempDir {
     path: PathBuf,
 }

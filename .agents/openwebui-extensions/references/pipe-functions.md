@@ -162,72 +162,42 @@ def pipes(self):
 ```python
 from pydantic import BaseModel, Field
 import requests
-import json
 
 class Pipe:
     class Valves(BaseModel):
         ANTHROPIC_API_KEY: str = Field(default="", description="Anthropic API key")
-        ANTHROPIC_BASE_URL: str = Field(
-            default="https://api.anthropic.com/v1",
-            description="Anthropic API base URL"
-        )
 
     def __init__(self):
         self.valves = self.Valves()
 
     def pipes(self):
-        return [
-            {"id": "claude-sonnet", "name": "Anthropic/Claude Sonnet"},
-            {"id": "claude-haiku", "name": "Anthropic/Claude Haiku"},
-        ]
+        return [{"id": "claude-sonnet", "name": "Anthropic/Claude Sonnet"}]
 
     async def pipe(self, body: dict, __user__: dict):
-        model_id = body["model"]
-        if "." in model_id:
-            model_id = model_id[model_id.find(".") + 1:]
-
-        # Map to Anthropic model IDs
-        model_map = {
-            "claude-sonnet": "claude-sonnet-4-20250514",
-            "claude-haiku": "claude-haiku-4-5-20251001",
-        }
-        anthropic_model = model_map.get(model_id, "claude-sonnet-4-20250514")
+        if not self.valves.ANTHROPIC_API_KEY:
+            return "Error: API key not set."
 
         # Convert OpenAI format to Anthropic format
-        messages = body.get("messages", [])
-        system_msg = ""
-        chat_messages = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_msg = msg["content"]
-            else:
-                chat_messages.append({"role": msg["role"], "content": msg["content"]})
+        messages = [{"role": m["role"], "content": m["content"]} for m in body.get("messages", []) if m["role"] != "system"]
+        system_msg = next((m["content"] for m in body.get("messages", []) if m["role"] == "system"), "")
 
         payload = {
-            "model": anthropic_model,
-            "max_tokens": body.get("max_tokens", 4096),
-            "messages": chat_messages,
+            "model": "claude-3-5-sonnet-20241022",
+            "messages": messages,
+            "max_tokens": 4096,
         }
-        if system_msg:
-            payload["system"] = system_msg
-
-        headers = {
-            "x-api-key": self.valves.ANTHROPIC_API_KEY,
-            "content-type": "application/json",
-            "anthropic-version": "2023-06-01",
-        }
+        if system_msg: payload["system"] = system_msg
 
         try:
             r = requests.post(
-                f"{self.valves.ANTHROPIC_BASE_URL}/messages",
+                "https://api.anthropic.com/v1/messages",
                 json=payload,
-                headers=headers,
+                headers={"x-api-key": self.valves.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01"},
             )
             r.raise_for_status()
-            data = r.json()
-            return data["content"][0]["text"]
+            return r.json()["content"][0]["text"]
         except Exception as e:
-            return f"Error calling Anthropic API: {e}"
+            return f"Error: {e}"
 ```
 
 ## Using Internal Open WebUI Functions
@@ -248,6 +218,15 @@ class Pipe:
         body["model"] = "llama3.2:latest"  # Route to a specific model
         return await generate_chat_completion(__request__, body, user)
 ```
+
+## Source Code Reference
+
+For exact runtime behavior — how pipe modules are loaded, class detection, and caching — see these Python source files in this references directory:
+
+- **`plugin.py`**: `load_function_module_by_id()` shows how `class Pipe:` is detected and instantiated, how frontmatter requirements are installed, and how modules are cached via `get_function_module_from_cache()`
+- **`tools.py`**: `get_tool_specs()` and `convert_function_to_pydantic_model()` show how function signatures are converted to OpenAI-compatible tool specs (relevant if your pipe also exposes tools)
+
+---
 
 ## Installation & Activation
 
