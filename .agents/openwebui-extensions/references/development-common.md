@@ -14,84 +14,11 @@ This reference covers shared concepts that apply to ALL Open WebUI extension typ
 
 ---
 
-## Valves
+## Valves & UserValves
 
-Valves are **persistent, admin-configurable settings** for your extension. They survive restarts and are shared across all users.
+**Valves** (admin-configurable settings) and **UserValves** (per-user settings) are highly recommended for all extensions to avoid hardcoding API keys, URLs, and tunable parameters.
 
-### Basic Pattern
-
-```python
-from pydantic import BaseModel, Field
-
-class Pipe:  # or Tool, Filter, etc.
-    class Valves(BaseModel):
-        API_KEY: str = Field(default="", description="API key for the service")
-        BASE_URL: str = Field(default="https://api.example.com", description="Base API URL")
-        MAX_RESULTS: int = Field(default=10, description="Maximum number of results to return")
-        ENABLED: bool = Field(default=True, description="Enable or disable this extension")
-
-    def __init__(self):
-        self.valves = self.Valves()
-```
-
-### Key Rules
-
-- Valves class MUST be defined inside the main class (Pipe, Tools, Filter, etc.)
-- Valves MUST inherit from `pydantic.BaseModel`
-- Always provide `default` values and `description` for each field
-- Initialize with `self.valves = self.Valves()` in `__init__`
-- Access values via `self.valves.FIELD_NAME`
-- Admins configure Valves via the UI (Admin Panel → Functions or Workspace → Tools)
-
-### Supported Field Types
-
-```python
-class Valves(BaseModel):
-    # Strings
-    API_KEY: str = Field(default="")
-    
-    # Numbers
-    TEMPERATURE: float = Field(default=0.7, ge=0.0, le=2.0)
-    MAX_TOKENS: int = Field(default=1000, ge=1, le=100000)
-    
-    # Booleans
-    STREAM: bool = Field(default=True)
-    
-    # Enums (dropdown in UI)
-    MODEL: str = Field(default="gpt-4", enum=["gpt-4", "gpt-3.5-turbo", "claude-3"])
-    
-    # Lists
-    ALLOWED_DOMAINS: list[str] = Field(default=["example.com"])
-```
-
----
-
-## UserValves
-
-UserValves are **per-user configurable settings** that individual users can modify for their own sessions.
-
-```python
-class Tools:  # or Pipe, Filter, etc.
-    class Valves(BaseModel):
-        API_KEY: str = Field(default="", description="Admin API key")
-
-    class UserValves(BaseModel):
-        PREFERRED_LANGUAGE: str = Field(default="en", description="User's preferred language")
-        SHOW_DETAILS: bool = Field(default=True, description="Show detailed output")
-
-    def __init__(self):
-        self.valves = self.Valves()
-```
-
-Access UserValves via the `__user__` reserved argument:
-
-```python
-async def pipe(self, body: dict, __user__: dict):
-    user_valves = __user__.get("valves", {})
-    language = user_valves.get("PREFERRED_LANGUAGE", "en")
-```
-
----
+👉 **See [valves.md](valves.md) for the complete reference**, including how to define them, how to mask passwords, and how to create dynamic dropdown menus.
 
 ## Reserved Arguments
 
@@ -188,33 +115,6 @@ await __event_emitter__({
         "metadata": [{"source": "https://example.com/article"}],
         "source": {"name": "Example Article", "url": "https://example.com/article"}
     }
-})
-```
-
-### Usage Pattern
-
-```python
-async def pipe(self, body: dict, __event_emitter__: Callable):
-    # Show progress
-    await __event_emitter__({"type": "status", "data": {"description": "Starting...", "done": False}})
-    
-    # Do work...
-    result = await self.fetch_data()
-    
-    # Add citation
-    await __event_emitter__({
-        "type": "citation",
-        "data": {
-            "document": [result["text"]],
-            "metadata": [{"source": result["url"]}],
-            "source": {"name": result["title"], "url": result["url"]}
-        }
-    })
-    
-    # Mark done
-    await __event_emitter__({"type": "status", "data": {"description": "Done!", "done": True}})
-    
-    return result["summary"]
 ```
 
 ---
@@ -258,3 +158,17 @@ async def pipe(self, body: dict):
 - External scripts from CDNs are supported
 - Keep the HTML self-contained — avoid dependencies on the parent page
 - Useful for charts, interactive forms, visualizations, mini-apps
+
+---
+
+## Source Code References
+
+For exact implementation details on the concepts above, see these Python source files in this references directory:
+
+| Concept | Source File | What to Look For |
+|---|---|---|
+| Valves loading & schema | `plugin.py` | `resolve_valves_schema_options()`, Valves initialization in `load_function_module_by_id()` / `load_tool_module_by_id()` |
+| Reserved args injection | `tools.py`, `filter.py`, `actions.py` | `extra_params` dict construction, `inspect.signature()` checks for which args are passed |
+| Event emitter/call setup | `actions.py` | `get_event_emitter()` and `get_event_call()` with chat_id, message_id, session_id, user_id |
+| Rich UI embed processing | `actions.py` | `process_tool_result()` call and embed event emission |
+| UserValves loading | `filter.py`, `actions.py`, `tools.py` | `Functions.get_user_valves_by_id_and_user_id()` merged into `__user__` dict |

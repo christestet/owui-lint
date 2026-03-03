@@ -153,80 +153,30 @@ async def on_valves_updated(self):
 
 ```python
 from pydantic import BaseModel, Field
-from typing import List, Union, Generator, Iterator
+from typing import Union, Generator, Iterator
 import requests
-import json
 
 class Pipeline:
     class Valves(BaseModel):
         API_KEY: str = Field(default="", description="Provider API key")
-        BASE_URL: str = Field(
-            default="https://api.provider.com/v1",
-            description="Provider API base URL"
-        )
-        NAME_PREFIX: str = Field(default="Provider/", description="Model name prefix")
+        BASE_URL: str = Field(default="https://api.provider.com/v1", description="Provider API base URL")
 
     def __init__(self):
         self.name = "External LLM Proxy"
         self.valves = self.Valves()
 
-    async def on_startup(self):
-        print(f"Starting {self.name} pipeline")
-
-    async def on_shutdown(self):
-        print(f"Shutting down {self.name} pipeline")
-
-    def pipes(self) -> List[dict]:
-        """Fetch available models from the provider."""
-        if not self.valves.API_KEY:
-            return [{"id": "error", "name": "API Key not configured"}]
-        
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.valves.API_KEY}",
-                "Content-Type": "application/json",
-            }
-            r = requests.get(f"{self.valves.BASE_URL}/models", headers=headers)
-            r.raise_for_status()
-            
-            models = r.json().get("data", [])
-            return [
-                {
-                    "id": m["id"],
-                    "name": f"{self.valves.NAME_PREFIX}{m.get('name', m['id'])}",
-                }
-                for m in models
-            ]
-        except Exception as e:
-            return [{"id": "error", "name": f"Error: {e}"}]
-
     def pipe(self, body: dict) -> Union[str, Generator, Iterator]:
         """Proxy the request to the external provider."""
-        headers = {
-            "Authorization": f"Bearer {self.valves.API_KEY}",
-            "Content-Type": "application/json",
-        }
+        headers = {"Authorization": f"Bearer {self.valves.API_KEY}", "Content-Type": "application/json"}
 
-        # Extract actual model ID
-        model_id = body["model"]
-        if "." in model_id:
-            model_id = model_id[model_id.find(".") + 1:]
-
+        # Extract actual model ID (remove pipeline prefix)
+        model_id = body["model"].split(".")[-1]
         payload = {**body, "model": model_id}
 
         try:
-            r = requests.post(
-                f"{self.valves.BASE_URL}/chat/completions",
-                json=payload,
-                headers=headers,
-                stream=body.get("stream", False),
-            )
+            r = requests.post(f"{self.valves.BASE_URL}/chat/completions", json=payload, headers=headers, stream=body.get("stream", False))
             r.raise_for_status()
-
-            if body.get("stream", False):
-                return r.iter_lines()
-            else:
-                return r.json()
+            return r.iter_lines() if body.get("stream", False) else r.json()
         except Exception as e:
             return f"Error: {e}"
 ```
@@ -237,6 +187,16 @@ The Open WebUI team maintains a collection of example pipelines at:
 **https://github.com/open-webui/pipelines/tree/main/examples/pipelines**
 
 These include examples for various providers, RAG setups, and advanced use cases.
+
+## Source Code Reference
+
+For how Open WebUI loads and caches extension modules (including frontmatter parsing, import replacement, and Valves schema resolution), see **`plugin.py`** in this references directory. Key details relevant to pipelines:
+
+- `extract_frontmatter()` parses the `"""..."""` block for `requirements`, `title`, etc.
+- `install_frontmatter_requirements()` handles `pip install` of comma-separated requirements
+- `resolve_valves_schema_options()` supports both static list options and dynamic method-based options in Valves
+
+---
 
 ## Connection Setup in Open WebUI
 

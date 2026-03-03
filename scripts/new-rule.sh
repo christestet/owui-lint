@@ -5,7 +5,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/new-rule.sh <RULE_ID> <error|warning> "<Title>" [help_url]
+  scripts/new-rule.sh <RULE_ID> <error|warning> "<Title>" [help_url] [openwebui_version]
 
 Example:
   scripts/new-rule.sh OWC600 warning "Missing cache timeout"
@@ -23,7 +23,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-if [[ $# -lt 3 || $# -gt 4 ]]; then
+if [[ $# -lt 3 || $# -gt 5 ]]; then
   usage
   exit 1
 fi
@@ -32,6 +32,7 @@ RULE_ID="$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')"
 SEVERITY_INPUT="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
 TITLE="$3"
 HELP_URL="${4:-PLUGIN_OVERVIEW}"
+OW_VERSION="${5:-0.0.0}"
 RULES_FILE="src/rules.rs"
 EXAMPLE_DIR="examples/rules"
 EXAMPLE_FILE="${EXAMPLE_DIR}/${RULE_ID}.md"
@@ -72,24 +73,29 @@ if grep -q "pub const ${RULE_ID}:" "${RULES_FILE}" || grep -q "id: ${RULE_ID}," 
 fi
 
 TMP_FILE="$(mktemp)"
-awk -v new_const="pub const ${RULE_ID}: &str = \"${RULE_ID}\";" '
-  /^const RULES: / && !inserted {
-    print new_const
-    inserted = 1
-  }
-  { print }
-' "${RULES_FILE}" > "${TMP_FILE}"
-mv "${TMP_FILE}" "${RULES_FILE}"
-
-TMP_FILE="$(mktemp)"
 awk \
+  -v new_const="pub const ${RULE_ID}: &str = \"${RULE_ID}\";" \
   -v rule_id="${RULE_ID}" \
   -v severity="${SEVERITY}" \
   -v title="${TITLE_ESCAPED}" \
   -v help_url_expr="${HELP_URL_EXPR}" \
+  -v ow_version="\"${OW_VERSION}\"" \
+  -v ow_version="${OW_VERSION}" \
 '
-  /^const RULES: / { in_rules = 1 }
-  in_rules && /^];$/ && !inserted {
+  /^const RULES:/ && !const_inserted {
+    print new_const
+    const_inserted = 1
+    in_rules = 1
+    # If fixed-size array [RuleDoc; N], increment N
+    if ($0 ~ /\[RuleDoc; [0-9]+\]/) {
+      n = $0
+      sub(/.*\[RuleDoc; /, "", n)
+      sub(/\].*/, "", n)
+      new_n = n + 1
+      sub(/\[RuleDoc; [0-9]+\]/, "[RuleDoc; " new_n "]")
+    }
+  }
+  in_rules && /^];$/ && !entry_inserted {
     print "    RuleDoc {"
     print "        id: " rule_id ","
     print "        default_severity: " severity ","
@@ -97,8 +103,9 @@ awk \
     print "        summary: \"TODO: describe what this rule validates.\","
     print "        remediation: \"TODO: describe the fix users should apply.\","
     print "        help_url: " help_url_expr ","
+    print "        openwebui_version: " ow_version ","
     print "    },"
-    inserted = 1
+    entry_inserted = 1
   }
   { print }
 ' "${RULES_FILE}" > "${TMP_FILE}"
@@ -114,6 +121,7 @@ cat > "${EXAMPLE_FILE}" <<EOF
 - [ ] Replaced TODO summary text with real explanation
 - [ ] Replaced TODO remediation text with actionable fix instructions
 - [ ] Verified \`help_url\` points to the right docs
+- [ ] Verified \`openwebui_version\` points to the right docs
 
 ## Linter Wiring
 

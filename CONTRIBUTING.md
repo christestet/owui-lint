@@ -74,6 +74,8 @@ Fast path (scaffold):
 This adds a new constant + `RuleDoc` template to `src/rules.rs` and creates
 `examples/rules/OWC600.md` with a contributor checklist.
 
+Run `make test-scripts` to verify the scaffolding script works correctly.
+
 ### 1) Add rule metadata (`src/rules.rs`)
 
 Add a new rule ID constant and a `RuleDoc` entry in `RULES`:

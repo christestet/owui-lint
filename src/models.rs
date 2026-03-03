@@ -60,9 +60,18 @@ pub struct FunctionInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValveFieldInfo {
+    pub name: String,
+    pub line: usize,
+    pub has_password_type: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NestedClassInfo {
     pub name: String,
     pub bases: Vec<String>,
+    pub line: usize,
+    pub fields: Vec<ValveFieldInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

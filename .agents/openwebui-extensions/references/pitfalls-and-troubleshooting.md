@@ -474,55 +474,16 @@ Installing a broken pipeline can crash Open WebUI in some cases.
 
 ---
 
-## 11. Model Compatibility
+## 11. Model Compatibility & Security
 
-### Models known to work well with tool calling
+**Model Compatibility:** Not all models support tool calling well. 
+- Use Native Mode for top-tier models (GPT-4o, Claude 3.5, Llama 3.1 70B+).
+- Use Default Mode (prompt-based) for smaller or reasoning models (DeepSeek, <7B models) that struggle with native tools.
 
-- GPT-4o, GPT-4o-mini (Native Mode)
-- Claude 3.5+, Claude 4+ (Native Mode)
-- Llama 3.1+ (70B+ preferred for reliable calling)
-- Qwen 2.5+ (good tool calling support)
-- Command-R, Command-R+ (Cohere)
-- Gemma 3 (reasonable with Default Mode)
-
-### Models with known tool calling issues
-
-- **DeepSeek V3.2**: Known native function calling failures. Use Default Mode.
-- **Small local models (<7B)**: Often unreliable with tool calling. Use Default Mode with explicit prompting.
-- **DeepSeek-R1**: Reasoning models may overthink tool use. Ollama API endpoint may not pass tool definitions — use OpenAI-compatible endpoint instead.
-
-### Tips for improving tool calling reliability
-
-1. Write extremely explicit docstrings — pretend the model has never seen your tool before.
-2. Use Default Mode for models that struggle with Native Mode.
-3. Keep tool parameter count low (1-3 parameters).
-4. Use simple types (str, int, bool) — avoid complex objects.
-5. Return clear, structured text — not raw JSON dumps.
-6. Don't offer too many tools at once — fewer tools = better selection.
-
----
-
-## 12. Security Pitfalls
-
-### Problem: Regular users can upload malicious tools
-
-**Fix:** Restrict Workspace access. Only trusted administrators should have permission to create, import, or modify Tools and Functions. Configure this in Admin Settings → User Permissions.
-
-### Problem: Community extensions contain malicious code
-
-**Fix:** ALWAYS review source code before importing. Check for:
-- File system access (`open()`, `os.*`, `shutil.*`)
-- Network calls to unknown servers
-- Environment variable reading (`os.environ`)
-- Subprocess execution (`subprocess.*`, `os.system()`)
-- Base64 encoded strings (may hide malicious payloads)
-
-### Problem: API keys leaked in logs or responses
-
-**Fix:**
-- Never log `self.valves` directly (it contains API keys)
-- Never include API keys in error messages returned to chat
-- Use `print(f"API call to {self.valves.BASE_URL}")` instead of `print(f"Using key: {self.valves.API_KEY}")`
+**Security:**
+- Restrict Workspace tool creation to trusted admins only. 
+- Review community extensions for malicious file/network access (`os.*`, `subprocess.*`) before importing.
+- Never log `self.valves` directly, as it contains API keys.
 
 ---
 
@@ -596,3 +557,16 @@ When something doesn't work, check these in order:
 8. **Is the right function calling mode selected?** (Native vs Default)
 9. **Are you checking the correct logs?** (`docker logs open-webui` for Functions, `docker logs pipelines` for Pipelines)
 10. **Did you try restarting?** (Some changes require a container restart)
+
+---
+
+## Source Code References
+
+When debugging, these Python source files in this references directory show the exact runtime behavior:
+
+| File | Helps Debug |
+|---|---|
+| `plugin.py` | Module loading failures, class name detection (`Pipe`/`Filter`/`Action`/`Tools`), frontmatter parsing, import replacement, Valves initialization |
+| `tools.py` | Tool not being called, spec generation issues, reserved arg injection, builtin tools, tool server integration |
+| `filter.py` | Filter ordering/priority, inlet/outlet/stream dispatch, `file_handler` behavior, Valves loading per filter |
+| `actions.py` | Action execution flow, sub-action routing, event emitter setup, Rich UI embed processing |

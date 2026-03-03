@@ -9,8 +9,9 @@ use crate::config::Config;
 use crate::glob::glob_match;
 use crate::models::{ClassInfo, Issue, LintSummary, ModuleInfo, Severity, SeverityOverride};
 use crate::rules::{
-    OWA400, OWA401, OWF300, OWF301, OWF302, OWP200, OWP201, OWP202, OWPL500, OWPL501, OWT100,
-    OWT101, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021, OWUI022, OWUI030, OWUI031, issue,
+    OWA400, OWA401, OWF300, OWF301, OWP200, OWP201, OWP202, OWPL500, OWPL501, OWT100, OWT101,
+    OWT102, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021, OWUI022, OWUI023, OWUI030, OWUI031,
+    OWUI032, issue,
 };
 
 const EXTENSION_CLASSES: [(&str, &str); 5] = [
@@ -277,7 +278,42 @@ fn lint_common(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
         ));
     }
 
+    for field in &valves.fields {
+        if is_sensitive_field_name(&field.name) && !field.has_password_type {
+            issues.push(issue(
+                OWUI023,
+                path,
+                field.line,
+                1,
+                format!(
+                    "Valves field '{}' looks sensitive but is not masked. \
+                     Add json_schema_extra={{\"input\": {{\"type\": \"password\"}}}} to the Field().",
+                    field.name
+                ),
+            ));
+        }
+    }
+
     issues
+}
+
+const SENSITIVE_PATTERNS: &[&str] = &[
+    "api_key",
+    "apikey",
+    "secret",
+    "token",
+    "password",
+    "passwd",
+    "auth_key",
+    "access_key",
+    "private_key",
+    "credential",
+];
+
+fn is_sensitive_field_name(name: &str) -> bool {
+    SENSITIVE_PATTERNS
+        .iter()
+        .any(|pattern| name.contains(pattern))
 }
 
 fn lint_tools(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
@@ -323,6 +359,15 @@ fn lint_tools(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
                     "Tool method '{}' should include a descriptive docstring.",
                     method.name
                 ),
+            ));
+        }
+        if !method.is_async {
+            issues.push(issue(
+                OWT102,
+                path,
+                method.line,
+                method.column,
+                format!("Tool method '{}' should be async.", method.name),
             ));
         }
     }
@@ -396,18 +441,6 @@ fn lint_filter(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
         ));
     }
 
-    if let Some(outlet) = outlet
-        && !outlet.returns_body
-    {
-        issues.push(issue(
-            OWF302,
-            path,
-            outlet.line,
-            outlet.column,
-            "Filter.outlet should return body.",
-        ));
-    }
-
     issues
 }
 
@@ -440,17 +473,18 @@ fn lint_action(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
 fn lint_pipeline(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
     let mut issues = Vec::new();
     let has_pipe = class_info.method("pipe").is_some();
+    let has_pipes = class_info.method("pipes").is_some();
     let has_filter_hook = class_info.method("inlet").is_some()
         || class_info.method("outlet").is_some()
         || class_info.method("stream").is_some();
 
-    if !has_pipe && !has_filter_hook {
+    if !has_pipe && !has_pipes && !has_filter_hook {
         issues.push(issue(
             OWPL500,
             path,
             class_info.line,
             class_info.column,
-            "Pipeline class must define 'pipe' or at least one filter hook (inlet/outlet/stream).",
+            "Pipeline class must define 'pipe', 'pipes' (manifold), or at least one filter hook (inlet/outlet/stream).",
         ));
     }
 
@@ -481,12 +515,16 @@ fn lint_module_header(path: &Path, module: &ModuleInfo) -> Vec<Issue> {
     let mut issues = Vec::new();
 
     let mut has_version = false;
+    let mut has_title = false;
     let mut req_value: Option<String> = None;
 
     for ds_line in docstring.lines() {
         let t = ds_line.trim();
         if t.starts_with("version:") {
             has_version = true;
+        }
+        if t.starts_with("title:") {
+            has_title = true;
         }
         if let Some(v) = t.strip_prefix("requirements:") {
             req_value = Some(v.trim().to_string());
@@ -500,6 +538,16 @@ fn lint_module_header(path: &Path, module: &ModuleInfo) -> Vec<Issue> {
             line,
             1,
             "Module header is missing a `version:` field. Consider adding e.g. `version: 0.1.0`.",
+        ));
+    }
+
+    if !has_title {
+        issues.push(issue(
+            OWUI032,
+            path,
+            line,
+            1,
+            "Module header is missing a `title:` field. Open WebUI uses this as the display name in the UI.",
         ));
     }
 

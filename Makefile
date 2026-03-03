@@ -40,8 +40,12 @@ lint: ## Run clippy checks
 test: ## Run Rust tests
 	cargo test --locked
 
+.PHONY: test-scripts
+test-scripts: ## Run shell script tests
+	bash scripts/test-new-rule.sh
+
 .PHONY: check
-check: fmt-check lint test ## Run all quality gates
+check: fmt-check lint test test-scripts ## Run all quality gates
 
 .PHONY: run
 run: ## Run owui-lint against TARGET (default: .)
