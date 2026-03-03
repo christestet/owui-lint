@@ -137,6 +137,12 @@ reset_rules
 run_script OWC608 warning "Custom URL" "https://example.com/docs" >/dev/null
 assert_file_contains "$WORK_DIR/src/rules.rs" '"https://example.com/docs"' "Custom URL appears quoted"
 
+# --- Test 13: Custom openwebui_version (5th arg) ---
+echo "--- Test 13: Custom openwebui_version ---"
+reset_rules
+run_script OWC611 warning "Custom Version" "PLUGIN_OVERVIEW" "0.8.0" >/dev/null
+assert_file_contains "$WORK_DIR/src/rules.rs" '"0.8.0"' "Custom version appears quoted"
+
 # --- Test 11: Constant help_url (default) ---
 echo "--- Test 11: Default help_url ---"
 reset_rules

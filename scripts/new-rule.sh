@@ -5,7 +5,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/new-rule.sh <RULE_ID> <error|warning> "<Title>" [help_url]
+  scripts/new-rule.sh <RULE_ID> <error|warning> "<Title>" [help_url] [openwebui_version]
 
 Example:
   scripts/new-rule.sh OWC600 warning "Missing cache timeout"
@@ -23,7 +23,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-if [[ $# -lt 3 || $# -gt 4 ]]; then
+if [[ $# -lt 3 || $# -gt 5 ]]; then
   usage
   exit 1
 fi
@@ -32,6 +32,7 @@ RULE_ID="$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')"
 SEVERITY_INPUT="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
 TITLE="$3"
 HELP_URL="${4:-PLUGIN_OVERVIEW}"
+OW_VERSION="${5:-0.0.0}"
 RULES_FILE="src/rules.rs"
 EXAMPLE_DIR="examples/rules"
 EXAMPLE_FILE="${EXAMPLE_DIR}/${RULE_ID}.md"
@@ -78,6 +79,8 @@ awk \
   -v severity="${SEVERITY}" \
   -v title="${TITLE_ESCAPED}" \
   -v help_url_expr="${HELP_URL_EXPR}" \
+  -v ow_version="\"${OW_VERSION}\"" \
+  -v ow_version="${OW_VERSION}" \
 '
   /^const RULES:/ && !const_inserted {
     print new_const
@@ -100,6 +103,7 @@ awk \
     print "        summary: \"TODO: describe what this rule validates.\","
     print "        remediation: \"TODO: describe the fix users should apply.\","
     print "        help_url: " help_url_expr ","
+    print "        openwebui_version: " ow_version ","
     print "    },"
     entry_inserted = 1
   }
@@ -117,6 +121,7 @@ cat > "${EXAMPLE_FILE}" <<EOF
 - [ ] Replaced TODO summary text with real explanation
 - [ ] Replaced TODO remediation text with actionable fix instructions
 - [ ] Verified \`help_url\` points to the right docs
+- [ ] Verified \`openwebui_version\` points to the right docs
 
 ## Linter Wiring
 
