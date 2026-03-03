@@ -293,12 +293,15 @@ fn pipe_openai_no_errors() {
 /// If this test starts FAILING (i.e. no OWF300 appears), the parser has been
 /// improved and this test should be updated to assert zero errors instead.
 #[test]
-fn filter_agent_hotswap_known_false_positive_owf300() {
-    let (issues, _) = lint_file!("filters/agent_hotswap/main.py");
-    assert!(
-        issues.iter().any(|i| i.rule_id == "OWF300"),
-        "OWF300 is a known false positive for agent_hotswap (multiline string with \
-         column-0 content confuses the indent-based parser). If this assertion \
-         fails, the parser has been fixed – update the test to assert no errors."
+fn filter_agent_hotswap_is_clean() {
+    let (issues, summary) = lint_file!("filters/agent_hotswap/main.py");
+    assert_eq!(
+        summary.errors,
+        0,
+        "unexpected errors: {:?}",
+        issues
+            .iter()
+            .filter(|i| i.severity == Severity::Error)
+            .collect::<Vec<_>>()
     );
 }

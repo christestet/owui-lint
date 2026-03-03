@@ -47,6 +47,59 @@ enum Context {
     Function(FunctionContext),
 }
 
+fn update_multiline_state(raw_line: &str, in_multiline: &mut Option<&'static str>) {
+    let mut chars = raw_line.chars();
+    let mut escaped = false;
+    let mut in_single = false;
+    let mut in_double = false;
+
+    while let Some(ch) = chars.next() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        let is_triple = |c: char, mut it: std::str::Chars| -> bool {
+            it.next() == Some(c) && it.next() == Some(c)
+        };
+
+        if let Some(quote) = *in_multiline {
+            let quote_char = quote.chars().next().unwrap();
+            if ch == quote_char && is_triple(quote_char, chars.clone()) {
+                *in_multiline = None;
+                chars.next();
+                chars.next();
+                continue;
+            }
+        } else {
+            if !in_single && !in_double {
+                if ch == '"' && is_triple('"', chars.clone()) {
+                    *in_multiline = Some("\"\"\"");
+                    chars.next();
+                    chars.next();
+                    continue;
+                } else if ch == '\'' && is_triple('\'', chars.clone()) {
+                    *in_multiline = Some("'''");
+                    chars.next();
+                    chars.next();
+                    continue;
+                } else if ch == '#' {
+                    break;
+                }
+            }
+            if ch == '\'' && !in_double {
+                in_single = !in_single;
+            } else if ch == '"' && !in_single {
+                in_double = !in_double;
+            }
+        }
+    }
+}
+
 pub fn analyze_file(path: &Path) -> ModuleInfo {
     let source = match fs::read_to_string(path) {
         Ok(source) => source,
@@ -106,6 +159,7 @@ fn parse_module(path: &Path, source: &str) -> ModuleInfo {
     let mut contexts: Vec<Context> = Vec::new();
     let lines: Vec<&str> = source.lines().collect();
     let mut line_idx = 0;
+    let mut in_multiline: Option<&'static str> = None;
 
     while line_idx < lines.len() {
         let raw_line = lines[line_idx];
@@ -113,7 +167,15 @@ fn parse_module(path: &Path, source: &str) -> ModuleInfo {
         let indent = count_indent(raw_line);
         let trimmed = raw_line.trim();
 
+        let was_in_multiline = in_multiline.is_some();
+        update_multiline_state(raw_line, &mut in_multiline);
+
         if trimmed.is_empty() || trimmed.starts_with('#') {
+            line_idx += 1;
+            continue;
+        }
+
+        if was_in_multiline {
             line_idx += 1;
             continue;
         }
