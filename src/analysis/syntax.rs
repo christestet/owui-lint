@@ -166,5 +166,38 @@ pub(super) fn detect_syntax_error(source: &str) -> Option<SyntaxErrorInfo> {
         });
     }
 
+    if let Some(quote) = string_state.quote {
+        return Some(SyntaxErrorInfo {
+            message: format!("Unclosed string literal: '{quote}'"),
+            line,
+            column,
+            text: source
+                .lines()
+                .nth(line.saturating_sub(1))
+                .map(|line_text| line_text.to_string()),
+        });
+    }
+
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::detect_syntax_error;
+
+    #[test]
+    fn detects_unclosed_double_quoted_string() {
+        let source = "x = \"hello\n";
+        let err = detect_syntax_error(source).expect("should detect unclosed string");
+        assert!(err.message.contains("Unclosed string literal"));
+    }
+
+    #[test]
+    fn ignores_delimiters_inside_strings() {
+        let source = "value = \"[(not real)]\"\n";
+        assert!(
+            detect_syntax_error(source).is_none(),
+            "delimiters inside strings should be ignored"
+        );
+    }
 }

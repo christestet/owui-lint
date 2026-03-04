@@ -35,8 +35,11 @@ pub const OWP201: &str = "OWP201";
 pub const OWP202: &str = "OWP202";
 pub const OWF300: &str = "OWF300";
 pub const OWF301: &str = "OWF301";
+pub const OWF303: &str = "OWF303";
+pub const OWF304: &str = "OWF304";
 pub const OWA400: &str = "OWA400";
 pub const OWA401: &str = "OWA401";
+pub const OWA402: &str = "OWA402";
 pub const OWPL500: &str = "OWPL500";
 pub const OWPL501: &str = "OWPL501";
 pub const OWUI023: &str = "OWUI023";
@@ -48,9 +51,9 @@ const RULES: &[RuleDoc] = &[
     RuleDoc {
         id: OWUI001,
         default_severity: Severity::Error,
-        title: "Python syntax error",
-        summary: "The file cannot be parsed as valid Python.",
-        remediation: "Fix syntax errors first; run `python -m py_compile <file.py>` to confirm.",
+        title: "Basic Python scan failed",
+        summary: "A lightweight Python delimiter/string scan found an issue. This is not full Python grammar validation.",
+        remediation: "Fix the reported issue first. Optionally run `python -m py_compile <file.py>` for full syntax verification.",
         help_url: "https://docs.python.org/3/reference/index.html",
         openwebui_version: "0.0.0",
     },
@@ -76,8 +79,8 @@ const RULES: &[RuleDoc] = &[
         id: OWUI020,
         default_severity: Severity::Warning,
         title: "Missing Valves class",
-        summary: "Extensions should provide a nested `Valves` class for runtime configuration.",
-        remediation: "Add `class Valves(BaseModel): ...` inside the extension class.",
+        summary: "Extensions should provide a nested `Valves` or `UserValves` class for runtime configuration.",
+        remediation: "Add `class Valves(BaseModel): ...` or `class UserValves(BaseModel): ...` inside the extension class.",
         help_url: VALVES_DOC,
         openwebui_version: "0.0.0",
     },
@@ -85,8 +88,8 @@ const RULES: &[RuleDoc] = &[
         id: OWUI021,
         default_severity: Severity::Warning,
         title: "Valves should inherit BaseModel",
-        summary: "Valves configuration should inherit from `pydantic.BaseModel`.",
-        remediation: "Change `class Valves:` to `class Valves(BaseModel):`.",
+        summary: "`Valves` and `UserValves` configuration should inherit from `pydantic.BaseModel`.",
+        remediation: "Change `class Valves:` / `class UserValves:` to inherit from `BaseModel`.",
         help_url: VALVES_DOC,
         openwebui_version: "0.0.0",
     },
@@ -94,7 +97,7 @@ const RULES: &[RuleDoc] = &[
         id: OWUI022,
         default_severity: Severity::Warning,
         title: "Valves not initialized",
-        summary: "The extension does not initialize `self.valves` in `__init__`.",
+        summary: "The extension does not initialize `self.valves` in `__init__` for a declared `Valves` class.",
         remediation: "Set `self.valves = self.Valves()` in `__init__`.",
         help_url: VALVES_DOC,
         openwebui_version: "0.0.0",
@@ -103,7 +106,7 @@ const RULES: &[RuleDoc] = &[
         id: OWUI023,
         default_severity: Severity::Warning,
         title: "Sensitive valve field not masked",
-        summary: "A Valves field name suggests sensitive data (API key, token, password) but does not use the password input type to mask UI display.",
+        summary: "A `Valves` or `UserValves` field name suggests sensitive data (API key, token, password) but does not use the password input type to mask UI display.",
         remediation: "Add `json_schema_extra={\"input\": {\"type\": \"password\"}}` to the Field() definition.",
         help_url: "https://docs.openwebui.com/features/extensibility/plugin/development/valves#input-types",
         openwebui_version: "0.8.0",
@@ -181,11 +184,38 @@ const RULES: &[RuleDoc] = &[
         openwebui_version: "0.0.0",
     },
     RuleDoc {
+        id: OWF303,
+        default_severity: Severity::Warning,
+        title: "Filter handler missing required payload parameter",
+        summary: "`Filter.inlet`/`Filter.outlet` should declare `body`, and `Filter.stream` should declare `event`, matching Open WebUI keyword injection.",
+        remediation: "Use `inlet(self, body, ...)` and `outlet(self, body, ...)`; for stream use `stream(self, event, ...)`.",
+        help_url: FILTER_DOC,
+        openwebui_version: "0.0.0",
+    },
+    RuleDoc {
+        id: OWF304,
+        default_severity: Severity::Warning,
+        title: "Filter.stream missing event parameter",
+        summary: "`Filter.stream` should accept an `event` parameter to receive streamed events from Open WebUI.",
+        remediation: "Change signature to `stream(self, event, ...)`.",
+        help_url: FILTER_DOC,
+        openwebui_version: "0.0.0",
+    },
+    RuleDoc {
         id: OWA400,
         default_severity: Severity::Error,
         title: "Action method missing",
         summary: "Action extension must define an `action` method.",
         remediation: "Add `async def action(self, body, ...)` to the class.",
+        help_url: ACTION_DOC,
+        openwebui_version: "0.0.0",
+    },
+    RuleDoc {
+        id: OWA402,
+        default_severity: Severity::Warning,
+        title: "Action.action missing body parameter",
+        summary: "`Action.action` should accept a `body` parameter, matching Open WebUI keyword injection.",
+        remediation: "Change signature to `action(self, body, ...)`.",
         help_url: ACTION_DOC,
         openwebui_version: "0.0.0",
     },

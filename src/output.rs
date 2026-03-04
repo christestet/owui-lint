@@ -7,19 +7,24 @@ use serde_json::{Value, json};
 use crate::models::{Issue, LintSummary, Severity};
 use crate::rules::{all_rules, rule_doc};
 
-pub fn format_text(issues: &[Issue], summary: &LintSummary) -> String {
+pub fn format_text(issues: &[Issue], summary: &LintSummary, colorize: bool) -> String {
     let mut lines = Vec::with_capacity((issues.len() * 4) + 3);
 
     for issue in issues {
-        lines.push(format!(
-            "{}:{}:{}: {} {} {}",
-            issue.path.display(),
-            issue.line,
-            issue.column,
-            issue.severity,
-            issue.rule_id,
-            issue.message
-        ));
+        let severity_label = style(
+            &issue.severity.to_string().to_ascii_uppercase(),
+            severity_style(issue.severity),
+            colorize,
+        );
+        let location = style(
+            &format!("{}:{}:{}", issue.path.display(), issue.line, issue.column),
+            "2;36",
+            colorize,
+        );
+        let rule_id = style(issue.rule_id, "1;35", colorize);
+
+        lines.push(format!("{location}  {severity_label} {rule_id}"));
+        lines.push(format!("  message: {}", issue.message));
 
         if let Some(rule) = rule_doc(issue.rule_id) {
             lines.push(format!("  help: {}", rule.summary));
@@ -28,9 +33,20 @@ pub fn format_text(issues: &[Issue], summary: &LintSummary) -> String {
         lines.push(String::new());
     }
 
+    let scanned = style("Scanned", "1", colorize);
+    let errors = style(
+        &format!("{} error(s)", summary.errors),
+        count_style(summary.errors, "1;31"),
+        colorize,
+    );
+    let warnings = style(
+        &format!("{} warning(s)", summary.warnings),
+        count_style(summary.warnings, "1;33"),
+        colorize,
+    );
     lines.push(format!(
-        "Scanned {} file(s), found {} error(s), {} warning(s).",
-        summary.files_scanned, summary.errors, summary.warnings
+        "{scanned} {} file(s), found {errors}, {warnings}.",
+        summary.files_scanned
     ));
 
     if !issues.is_empty() {
@@ -327,4 +343,80 @@ fn format_rule_counts(issues: &[Issue]) -> String {
         .map(|(rule, count)| format!("{rule} ({count})"))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn style(text: &str, ansi_code: &str, enabled: bool) -> String {
+    if enabled {
+        format!("\u{1b}[{ansi_code}m{text}\u{1b}[0m")
+    } else {
+        text.to_string()
+    }
+}
+
+fn severity_style(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Error => "1;31",
+        Severity::Warning => "1;33",
+    }
+}
+
+fn count_style(count: usize, emphasized: &'static str) -> &'static str {
+    if count > 0 { emphasized } else { "2" }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::models::{Issue, LintSummary, Severity};
+
+    use super::format_text;
+
+    #[test]
+    fn text_output_is_plain_when_color_is_disabled() {
+        let issue = Issue {
+            rule_id: "OWT101",
+            severity: Severity::Warning,
+            message: "Missing method docstring.".to_string(),
+            path: PathBuf::from("tools.py"),
+            line: 9,
+            column: 11,
+        };
+        let summary = LintSummary {
+            files_scanned: 1,
+            errors: 0,
+            warnings: 1,
+        };
+
+        let rendered = format_text(&[issue], &summary, false);
+
+        assert!(rendered.contains("tools.py:9:11"));
+        assert!(rendered.contains("WARNING"));
+        assert!(rendered.contains("message: Missing method docstring."));
+        assert!(!rendered.contains("\u{1b}["));
+    }
+
+    #[test]
+    fn text_output_uses_ansi_when_color_is_enabled() {
+        let issue = Issue {
+            rule_id: "OWUI001",
+            severity: Severity::Error,
+            message: "Python syntax error.".to_string(),
+            path: PathBuf::from("broken.py"),
+            line: 4,
+            column: 5,
+        };
+        let summary = LintSummary {
+            files_scanned: 1,
+            errors: 1,
+            warnings: 0,
+        };
+
+        let rendered = format_text(&[issue], &summary, true);
+
+        assert!(rendered.contains("\u{1b}["));
+        assert!(rendered.contains("ERROR"));
+        assert!(rendered.contains("Scanned"));
+        assert!(rendered.contains("1 error(s)"));
+    }
 }

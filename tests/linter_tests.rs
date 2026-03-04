@@ -247,6 +247,29 @@ fn missing_title_in_header_warns_owui032() {
 }
 
 #[test]
+fn prefixed_module_header_still_triggers_requirement_checks() {
+    let temp = TempDir::new("owui031_prefixed_header");
+    let file_path = temp.write(
+        "tools.py",
+        "r\"\"\"\ntitle: My Tool\nversion: 0.1.0\nrequirements: requests\n\"\"\"\nfrom pydantic import BaseModel\n\nclass Tools:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def do_thing(self, x: str) -> str:\n        \"\"\"Does a thing.\"\"\"\n        return x\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWUI031" && issue.severity == Severity::Warning),
+        "Expected OWUI031 for unpinned requirements in prefixed module header, got: {issues:?}"
+    );
+    assert!(!issues.iter().any(|issue| issue.rule_id == "OWUI030"));
+    assert!(!issues.iter().any(|issue| issue.rule_id == "OWUI032"));
+}
+
+#[test]
 fn pipeline_with_pipes_method_does_not_raise_owpl500() {
     let temp = TempDir::new("pipeline_manifold");
     let file_path = temp.write(
@@ -260,6 +283,25 @@ fn pipeline_with_pipes_method_does_not_raise_owpl500() {
     let (issues, _) = lint_files(&files, &config);
 
     assert!(!issues.iter().any(|issue| issue.rule_id == "OWPL500"));
+}
+
+#[test]
+fn filter_inlet_returning_parenthesized_body_does_not_warn_owf301() {
+    let temp = TempDir::new("owf301_parenthesized_return");
+    let file_path = temp.write(
+        "filter.py",
+        "from pydantic import BaseModel\n\nclass Filter:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def inlet(self, body: dict) -> dict:\n        return (body)\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        !issues.iter().any(|issue| issue.rule_id == "OWF301"),
+        "Parenthesized `return (body)` should satisfy OWF301, got: {issues:?}"
+    );
 }
 
 #[test]
@@ -384,6 +426,278 @@ fn mixed_compliance_valve_fields_only_warns_unmasked() {
         owui023_issues[0].message.contains("secret_token"),
         "OWUI023 should be for secret_token, got: {}",
         owui023_issues[0].message
+    );
+}
+
+#[test]
+fn sensitive_field_with_password_word_in_description_still_warns_owui023() {
+    let temp = TempDir::new("owui023_password_word_only");
+    let file_path = temp.write(
+        "tools.py",
+        "\"\"\"\ntitle: My Tool\nversion: 0.1.0\n\"\"\"\nfrom pydantic import BaseModel, Field\n\nclass Tools:\n    class Valves(BaseModel):\n        api_key: str = Field(default=\"\", description=\"Use your password from provider dashboard\")\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def do_thing(self, x: str) -> str:\n        \"\"\"Does a thing.\"\"\"\n        return x\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWUI023" && issue.severity == Severity::Warning),
+        "Expected OWUI023 when only description mentions password, got: {issues:?}"
+    );
+}
+
+#[test]
+fn tokenizer_like_field_name_does_not_warn_owui023() {
+    let temp = TempDir::new("owui023_tokenizer_false_positive");
+    let file_path = temp.write(
+        "tools.py",
+        "\"\"\"\ntitle: My Tool\nversion: 0.1.0\n\"\"\"\nfrom pydantic import BaseModel\n\nclass Tools:\n    class Valves(BaseModel):\n        tokenizer_model: str = \"gpt2\"\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def do_thing(self, x: str) -> str:\n        \"\"\"Does a thing.\"\"\"\n        return x\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        !issues.iter().any(|issue| issue.rule_id == "OWUI023"),
+        "tokenizer-like names should not trigger OWUI023, got: {issues:?}"
+    );
+}
+
+#[test]
+fn token_count_toggle_does_not_warn_owui023() {
+    let temp = TempDir::new("owui023_token_count_toggle");
+    let file_path = temp.write(
+        "filter.py",
+        "\"\"\"\ntitle: Token Count Filter\nversion: 0.1.0\n\"\"\"\nfrom pydantic import BaseModel, Field\n\nclass Filter:\n    class Valves(BaseModel):\n        SHOW_TOKEN_COUNT: bool = Field(default=True, description=\"Show token count\")\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def inlet(self, body: dict) -> dict:\n        return body\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        !issues.iter().any(|issue| issue.rule_id == "OWUI023"),
+        "token count toggles should not trigger OWUI023, got: {issues:?}"
+    );
+}
+
+#[test]
+fn password_word_in_non_type_field_does_not_count_as_masking() {
+    let temp = TempDir::new("owui023_password_placeholder_only");
+    let file_path = temp.write(
+        "tools.py",
+        "\"\"\"\ntitle: My Tool\nversion: 0.1.0\n\"\"\"\nfrom pydantic import BaseModel, Field\n\nclass Tools:\n    class Valves(BaseModel):\n        api_key: str = Field(default=\"\", json_schema_extra={\"input\": {\"type\": \"text\", \"placeholder\": \"password\"}})\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def do_thing(self, x: str) -> str:\n        \"\"\"Does a thing.\"\"\"\n        return x\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWUI023" && issue.severity == Severity::Warning),
+        "Expected OWUI023 when input type is not password, got: {issues:?}"
+    );
+}
+
+#[test]
+fn single_quoted_password_input_type_counts_as_masked() {
+    let temp = TempDir::new("owui023_single_quote_password_type");
+    let file_path = temp.write(
+        "tools.py",
+        "\"\"\"\ntitle: My Tool\nversion: 0.1.0\n\"\"\"\nfrom pydantic import BaseModel, Field\n\nclass Tools:\n    class Valves(BaseModel):\n        api_key: str = Field(default='', json_schema_extra={'input': {'type': 'password'}})\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def do_thing(self, x: str) -> str:\n        \"\"\"Does a thing.\"\"\"\n        return x\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        !issues.iter().any(|issue| issue.rule_id == "OWUI023"),
+        "Expected no OWUI023 when input type is password (single quotes), got: {issues:?}"
+    );
+}
+
+#[test]
+fn user_valves_only_satisfies_common_valve_rules() {
+    let temp = TempDir::new("user_valves_only");
+    let file_path = temp.write(
+        "filter.py",
+        "from pydantic import BaseModel\n\nclass Filter:\n    class UserValves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.user_valves = self.UserValves()\n\n    async def inlet(self, body: dict, __user__: dict) -> dict:\n        return body\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(!issues.iter().any(|issue| issue.rule_id == "OWUI020"));
+    assert!(!issues.iter().any(|issue| issue.rule_id == "OWUI021"));
+    assert!(!issues.iter().any(|issue| issue.rule_id == "OWUI022"));
+}
+
+#[test]
+fn user_valves_without_basemodel_warns_owui021() {
+    let temp = TempDir::new("user_valves_no_basemodel");
+    let file_path = temp.write(
+        "filter.py",
+        "class Filter:\n    class UserValves:\n        pass\n\n    def __init__(self):\n        self.user_valves = self.UserValves()\n\n    async def inlet(self, body: dict, __user__: dict) -> dict:\n        return body\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(issues.iter().any(|issue| issue.rule_id == "OWUI021"));
+}
+
+#[test]
+fn filter_inlet_without_body_arg_warns_signature_rule() {
+    let temp = TempDir::new("owf303_inlet_missing_body");
+    let file_path = temp.write(
+        "filter.py",
+        "from pydantic import BaseModel\n\nclass Filter:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def inlet(self, payload: dict) -> dict:\n        return payload\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWF303" && issue.severity == Severity::Warning),
+        "Expected OWF303 for inlet missing body arg, got: {issues:?}"
+    );
+}
+
+#[test]
+fn filter_stream_without_event_arg_warns_signature_rule() {
+    let temp = TempDir::new("owf304_stream_missing_event");
+    let file_path = temp.write(
+        "filter.py",
+        "from pydantic import BaseModel\n\nclass Filter:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def stream(self, chunk: dict):\n        return chunk\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWF304" && issue.severity == Severity::Warning),
+        "Expected OWF304 for stream missing event arg, got: {issues:?}"
+    );
+}
+
+#[test]
+fn action_without_body_arg_warns_signature_rule() {
+    let temp = TempDir::new("owa402_action_missing_body");
+    let file_path = temp.write(
+        "action.py",
+        "from pydantic import BaseModel\n\nclass Action:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def action(self, payload: dict):\n        return payload\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWA402" && issue.severity == Severity::Warning),
+        "Expected OWA402 for action missing body arg, got: {issues:?}"
+    );
+}
+
+#[test]
+fn filter_reserved_args_with_body_event_names_do_not_warn_signature_rules() {
+    let temp = TempDir::new("reserved_args_signature_ok");
+    let file_path = temp.write(
+        "filter.py",
+        "from pydantic import BaseModel\n\nclass Filter:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def inlet(self, body: dict, __user__: dict, __event_emitter__=None) -> dict:\n        return body\n\n    async def stream(self, event: dict, __metadata__: dict):\n        return event\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(!issues.iter().any(|issue| issue.rule_id == "OWF303"));
+    assert!(!issues.iter().any(|issue| issue.rule_id == "OWF304"));
+}
+
+#[test]
+fn user_valves_not_initialized_warns_owui022() {
+    let temp = TempDir::new("user_valves_not_initialized");
+    let file_path = temp.write(
+        "filter.py",
+        "from pydantic import BaseModel\n\nclass Filter:\n    class UserValves(BaseModel):\n        pass\n\n    def __init__(self):\n        pass\n\n    async def inlet(self, body: dict, __user__: dict) -> dict:\n        return body\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        !issues.iter().any(|issue| issue.rule_id == "OWUI022"),
+        "UserValves should not require self.user_valves initialization, got: {issues:?}"
+    );
+}
+
+#[test]
+fn valves_not_initialized_still_warns_owui022() {
+    let temp = TempDir::new("valves_not_initialized");
+    let file_path = temp.write(
+        "pipe.py",
+        "from pydantic import BaseModel\n\nclass Pipe:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        pass\n\n    async def pipe(self, body: dict) -> dict:\n        return body\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues.iter().any(|issue| issue.rule_id == "OWUI022"),
+        "Valves should still require self.valves initialization, got: {issues:?}"
+    );
+}
+
+#[test]
+fn sensitive_user_valve_field_without_password_type_warns_owui023() {
+    let temp = TempDir::new("owui023_user_valves");
+    let file_path = temp.write(
+        "filter.py",
+        "from pydantic import BaseModel\n\nclass Filter:\n    class UserValves(BaseModel):\n        api_key: str = \"\"\n\n    def __init__(self):\n        self.user_valves = self.UserValves()\n\n    async def inlet(self, body: dict, __user__: dict) -> dict:\n        return body\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWUI023" && issue.severity == Severity::Warning),
+        "Expected OWUI023 for unmasked user-scoped api_key field, got: {issues:?}"
     );
 }
 
