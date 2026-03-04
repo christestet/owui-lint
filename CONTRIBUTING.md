@@ -76,6 +76,25 @@ This adds a new constant + `RuleDoc` template to `src/rules.rs` and creates
 
 Run `make test-scripts` to verify the scaffolding script works correctly.
 
+## Keeping README Commands/Rules in Sync
+
+`README.md` command and rule reference blocks are generated from live CLI output.
+
+```bash
+make docs-sync   # rewrite generated README blocks
+make docs-check  # fail if README is out of date
+```
+
+CI enforces this with `make docs-check`.
+
+Optional local automation (pre-commit hook):
+
+```bash
+bash scripts/install-git-hook.sh
+```
+
+The installed hook runs `cargo run --locked --bin docs-sync -- --write` and stages `README.md`.
+
 ### 1) Add rule metadata (`src/rules.rs`)
 
 Add a new rule ID constant and a `RuleDoc` entry in `RULES`:

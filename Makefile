@@ -12,7 +12,7 @@ RUST_IMAGE ?= rust:1.93-bookworm
 INSTALL_DIR ?= ./bin
 RUST_DOCKER_RUN = docker run --rm -v "$$(pwd):/work" -w /work $(RUST_IMAGE) bash -lc 'export PATH=/usr/local/cargo/bin:$$PATH && rustup component add rustfmt clippy && make $(1)'
 
-.PHONY: help build build-release release fmt fmt-check lint test test-scripts check run run-json run-sarif dist install ci ci-check clean docker-build docker-run docker-install docker-check docker-ci
+.PHONY: help build build-release release fmt fmt-check lint test test-scripts docs-sync docs-check check run run-json run-sarif dist install ci ci-check clean docker-build docker-run docker-install docker-check docker-ci
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*##"; print "Available targets:"} /^[a-zA-Z0-9_.-]+:.*##/ {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -39,6 +39,13 @@ test: ## Run Rust tests
 
 test-scripts: ## Run shell script tests
 	bash scripts/test-new-rule.sh
+	bash scripts/test-sync-readme.sh
+
+docs-sync: ## Regenerate README command/rule sections from live CLI output
+	cargo run --locked --bin docs-sync -- --write
+
+docs-check: ## Fail if generated README command/rule sections are out of date
+	cargo run --locked --bin docs-sync -- --check
 
 check: fmt-check lint test test-scripts ## Run all quality gates
 

@@ -16,12 +16,12 @@
 Use the Makefile for all common workflows:
 
 ```
-make check        # fmt-check + clippy + test (the CI gate)
+make docker-check # run all quality gates in Docker (CI parity)
 make run          # lint current directory
 make build        # debug build
 ```
 
-Verify every change with `make check` before committing.
+Verify every change with `make docker-check` before committing.
 
 ## Deep-Dive Docs
 

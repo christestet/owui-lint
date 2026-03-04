@@ -258,9 +258,9 @@ const RULES: &[RuleDoc] = &[
     RuleDoc {
         id: OWUI031,
         default_severity: Severity::Warning,
-        title: "Unpinned requirements in module header",
-        summary: "One or more packages in `requirements:` lack a pinned version specifier.",
-        remediation: "Pin each package, e.g. change `llama-index` to `llama-index==0.1.2`.",
+        title: "Requirements missing version specifier in module header",
+        summary: "One or more packages in `requirements:` have no version specifier.",
+        remediation: "Add a version specifier to each package, e.g. change `llama-index` to `llama-index>=0.1.2` (or pin exactly with `==`).",
         help_url: PLUGIN_OVERVIEW,
         openwebui_version: "0.0.0",
     },

@@ -649,9 +649,10 @@ fn lint_module_header(path: &Path, module: &ModuleInfo) -> Vec<Issue> {
                 line,
                 1,
                 format!(
-                    "Unpinned requirements detected: {}. Consider pinning versions with `==` \
-                     (e.g. `{}==1.2.3`).",
+                    "Requirements without a version specifier detected: {}. Consider adding a \
+                     specifier (e.g. `{}>=1.2.3` or `{}==1.2.3`).",
                     unpinned.join(", "),
+                    unpinned[0],
                     unpinned[0],
                 ),
             ));

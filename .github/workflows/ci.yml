@@ -43,3 +43,6 @@ jobs:
 
       - name: Script tests
         run: make test-scripts
+
+      - name: Docs sync check
+        run: make docs-check
