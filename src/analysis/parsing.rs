@@ -197,6 +197,26 @@ fn is_valid_identifier(value: &str) -> bool {
     chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
 }
 
+fn triple_quote_start(trimmed: &str) -> Option<(&'static str, usize)> {
+    let mut prefix_len = 0;
+    for ch in trimmed.chars() {
+        if matches!(ch, 'r' | 'R' | 'u' | 'U' | 'b' | 'B' | 'f' | 'F') {
+            prefix_len += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    let rest = &trimmed[prefix_len..];
+    if rest.starts_with("\"\"\"") {
+        Some(("\"\"\"", prefix_len))
+    } else if rest.starts_with("'''") {
+        Some(("'''", prefix_len))
+    } else {
+        None
+    }
+}
+
 pub(super) fn extract_module_docstring(source: &str) -> Option<(String, usize)> {
     let lines: Vec<&str> = source.lines().collect();
     let mut i = 0;
@@ -215,16 +235,10 @@ pub(super) fn extract_module_docstring(source: &str) -> Option<(String, usize)> 
     }
 
     let first = lines[i].trim();
-    let quote = if first.starts_with("\"\"\"") {
-        "\"\"\""
-    } else if first.starts_with("'''") {
-        "'''"
-    } else {
-        return None;
-    };
+    let (quote, quote_start) = triple_quote_start(first)?;
 
     let start_line = i + 1; // 1-indexed
-    let after_open = &first[quote.len()..];
+    let after_open = &first[quote_start + quote.len()..];
 
     // Single-line docstring closed on the same line.
     if let Some(close_pos) = after_open.find(quote) {
@@ -250,7 +264,7 @@ pub(super) fn extract_module_docstring(source: &str) -> Option<(String, usize)> 
 }
 
 pub(super) fn is_docstring_line(trimmed: &str) -> bool {
-    trimmed.starts_with("\"\"\"") || trimmed.starts_with("'''")
+    triple_quote_start(trimmed).is_some()
 }
 
 pub(super) fn self_assignment_name(trimmed: &str) -> Option<&str> {
@@ -268,7 +282,16 @@ pub(super) fn self_assignment_name(trimmed: &str) -> Option<&str> {
 
 pub(super) fn returns_body(trimmed: &str) -> bool {
     if let Some(rest) = trimmed.strip_prefix("return") {
-        return strip_inline_comment(rest).trim() == "body";
+        let expression = strip_inline_comment(rest).trim();
+        if expression == "body" {
+            return true;
+        }
+        if let Some(inner) = expression
+            .strip_prefix('(')
+            .and_then(|v| v.strip_suffix(')'))
+        {
+            return inner.trim() == "body";
+        }
     }
     false
 }
@@ -314,6 +337,69 @@ fn accumulate_statement(lines: &[&str], start: usize) -> (String, usize) {
     }
 
     (text, consumed)
+}
+
+fn next_unescaped_quote(value: &str, start: usize, quote: char) -> Option<usize> {
+    let mut escaped = false;
+    for (offset, ch) in value[start..].char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        if ch == quote {
+            return Some(start + offset);
+        }
+    }
+    None
+}
+
+fn has_password_input_type(statement: &str) -> bool {
+    let mut pos = 0;
+    while pos < statement.len() {
+        let mut iter = statement[pos..].char_indices();
+        let Some((key_rel_start, quote)) = iter.find(|(_, ch)| *ch == '"' || *ch == '\'') else {
+            break;
+        };
+        let key_start = pos + key_rel_start;
+        let value_start = key_start + quote.len_utf8();
+        let Some(key_end) = next_unescaped_quote(statement, value_start, quote) else {
+            break;
+        };
+        let key = &statement[value_start..key_end];
+        pos = key_end + quote.len_utf8();
+
+        if !key.eq_ignore_ascii_case("type") {
+            continue;
+        }
+
+        let mut rest = &statement[pos..];
+        rest = rest.trim_start();
+        if !rest.starts_with(':') {
+            continue;
+        }
+        rest = rest[1..].trim_start();
+        let mut chars = rest.chars();
+        let Some(value_quote) = chars.next() else {
+            continue;
+        };
+        if value_quote != '"' && value_quote != '\'' {
+            continue;
+        }
+        let value_start_in_rest = value_quote.len_utf8();
+        let Some(value_end_in_rest) = next_unescaped_quote(rest, value_start_in_rest, value_quote)
+        else {
+            continue;
+        };
+        let field_value = &rest[value_start_in_rest..value_end_in_rest];
+        if field_value.eq_ignore_ascii_case("password") {
+            return true;
+        }
+    }
+    false
 }
 
 /// Parse Valves/UserValves class body to extract field definitions.
@@ -373,8 +459,7 @@ pub(super) fn parse_valve_fields(lines: &[&str], class_line_idx: usize) -> Vec<V
         if let Some(name) = extract_field_name(trimmed) {
             let line_no = i + 1; // 1-indexed
             let (full_stmt, consumed) = accumulate_statement(lines, i);
-            let has_password_type =
-                full_stmt.contains("\"password\"") || full_stmt.contains("'password'");
+            let has_password_type = has_password_input_type(&full_stmt);
             fields.push(ValveFieldInfo {
                 name: name.to_ascii_lowercase(),
                 line: line_no,
@@ -387,4 +472,88 @@ pub(super) fn parse_valve_fields(lines: &[&str], class_line_idx: usize) -> Vec<V
     }
 
     fields
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        collect_function_signature, extract_module_docstring, parse_valve_fields, returns_body,
+    };
+
+    #[test]
+    fn collect_function_signature_ignores_inline_comments_across_lines() {
+        let lines = [
+            "async def pipe(  # comment",
+            "    self,",
+            "    body: dict,  # trailing",
+            ") -> dict:",
+            "    return body",
+        ];
+
+        let (signature, consumed) = collect_function_signature(&lines, 0);
+        assert_eq!(consumed, 4);
+        assert_eq!(
+            signature, "async def pipe( self, body: dict, ) -> dict:",
+            "signature should be merged without comments"
+        );
+    }
+
+    #[test]
+    fn returns_body_allows_inline_comment() {
+        assert!(returns_body("return body  # keep contract"));
+    }
+
+    #[test]
+    fn returns_body_allows_parenthesized_body() {
+        assert!(returns_body("return (body)"));
+    }
+
+    #[test]
+    fn extract_module_docstring_supports_prefixed_triple_quotes() {
+        let source = r#"r"""
+title: Prefixed Header
+version: 0.1.0
+requirements: requests
+"""
+class Tools:
+    pass
+"#;
+
+        let (docstring, line) =
+            extract_module_docstring(source).expect("prefixed module docstring should be parsed");
+        assert_eq!(line, 1);
+        assert!(docstring.contains("title: Prefixed Header"));
+        assert!(docstring.contains("version: 0.1.0"));
+    }
+
+    #[test]
+    fn parse_valve_fields_requires_password_input_type_not_plain_password_word() {
+        let source = [
+            "class Valves(BaseModel):",
+            "    api_key: str = Field(",
+            "        default=\"\",",
+            "        json_schema_extra={\"input\": {\"type\": \"text\", \"placeholder\": \"password\"}}",
+            "    )",
+        ];
+        let fields = parse_valve_fields(&source, 0);
+        assert_eq!(fields.len(), 1);
+        assert!(
+            !fields[0].has_password_type,
+            "password keyword outside input.type should not count as masking"
+        );
+    }
+
+    #[test]
+    fn parse_valve_fields_detects_single_quoted_password_input_type() {
+        let source = [
+            "class Valves(BaseModel):",
+            "    api_key: str = Field(default='', json_schema_extra={'input': {'type': 'password'}})",
+        ];
+        let fields = parse_valve_fields(&source, 0);
+        assert_eq!(fields.len(), 1);
+        assert!(
+            fields[0].has_password_type,
+            "single-quoted password input type should count as masking"
+        );
+    }
 }

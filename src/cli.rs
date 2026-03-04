@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::fs;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use clap::error::ErrorKind;
@@ -203,7 +204,7 @@ fn run_lint(cli: LintArgs) -> i32 {
     let (issues, summary) = lint_files(&files, &config);
 
     let output = match cli.format {
-        OutputFormat::Text => format_text(&issues, &summary),
+        OutputFormat::Text => format_text(&issues, &summary, should_colorize_text_output(&cli)),
         OutputFormat::Json => format_json(&issues, &summary),
         OutputFormat::Github => format_github(&issues, &summary),
         OutputFormat::Sarif => format_sarif(&issues, &summary, env!("CARGO_PKG_VERSION")),
@@ -232,4 +233,30 @@ fn write_or_print(output: &str, output_path: Option<PathBuf>) -> i32 {
     }
 
     0
+}
+
+fn should_colorize_text_output(cli: &LintArgs) -> bool {
+    if cli.output.is_some() {
+        return false;
+    }
+
+    let force = std::env::var("CLICOLOR_FORCE")
+        .map(|value| value != "0")
+        .unwrap_or(false);
+    if force {
+        return true;
+    }
+
+    if std::env::var_os("NO_COLOR").is_some() {
+        return false;
+    }
+
+    let term_is_dumb = std::env::var("TERM")
+        .map(|value| value.eq_ignore_ascii_case("dumb"))
+        .unwrap_or(false);
+    if term_is_dumb {
+        return false;
+    }
+
+    std::io::stdout().is_terminal()
 }

@@ -9,9 +9,9 @@ use crate::config::Config;
 use crate::glob::glob_match;
 use crate::models::{ClassInfo, Issue, LintSummary, ModuleInfo, Severity, SeverityOverride};
 use crate::rules::{
-    OWA400, OWA401, OWF300, OWF301, OWP200, OWP201, OWP202, OWPL500, OWPL501, OWT100, OWT101,
-    OWT102, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021, OWUI022, OWUI023, OWUI030, OWUI031,
-    OWUI032, issue,
+    OWA400, OWA401, OWA402, OWF300, OWF301, OWF303, OWF304, OWP200, OWP201, OWP202, OWPL500,
+    OWPL501, OWT100, OWT101, OWT102, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021, OWUI022, OWUI023,
+    OWUI030, OWUI031, OWUI032, issue,
 };
 
 const EXTENSION_CLASSES: [(&str, &str); 5] = [
@@ -131,7 +131,7 @@ fn lint_module(module: &ModuleInfo) -> Vec<Issue> {
             &module.path,
             line,
             column,
-            format!("Python syntax error: {message}"),
+            format!("Basic Python scan failed: {message}"),
         ));
         return issues;
     }
@@ -238,59 +238,71 @@ fn lint_extension_class(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
 fn lint_common(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
     let mut issues = Vec::new();
 
-    let Some(valves) = class_info.inner_class("Valves") else {
+    let valves = class_info.inner_class("Valves");
+    let user_valves = class_info.inner_class("UserValves");
+    if valves.is_none() && user_valves.is_none() {
         issues.push(issue(
             OWUI020,
             path,
             class_info.line,
             class_info.column,
             format!(
-                "{} should define an inner Valves class for configuration.",
+                "{} should define an inner Valves or UserValves class for configuration.",
                 class_info.name
             ),
         ));
         return issues;
-    };
-
-    let has_base_model = valves
-        .bases
-        .iter()
-        .map(|base| base.split('.').next_back().unwrap_or(base.as_str()))
-        .any(|base| base == "BaseModel");
-
-    if !has_base_model {
-        issues.push(issue(
-            OWUI021,
-            path,
-            class_info.line,
-            class_info.column,
-            "Valves should inherit from pydantic.BaseModel.",
-        ));
     }
 
-    if !class_info.init_assignments.contains("valves") {
-        issues.push(issue(
-            OWUI022,
-            path,
-            class_info.line,
-            class_info.column,
-            "Initialize valves in __init__ with self.valves = self.Valves().",
-        ));
-    }
+    for (config_class_name, config_attr_name, config) in [
+        ("Valves", "valves", valves),
+        ("UserValves", "user_valves", user_valves),
+    ] {
+        let Some(config) = config else {
+            continue;
+        };
+        let has_base_model = config
+            .bases
+            .iter()
+            .map(|base| base.split('.').next_back().unwrap_or(base.as_str()))
+            .any(|base| base == "BaseModel");
 
-    for field in &valves.fields {
-        if is_sensitive_field_name(&field.name) && !field.has_password_type {
+        if !has_base_model {
             issues.push(issue(
-                OWUI023,
+                OWUI021,
                 path,
-                field.line,
-                1,
+                class_info.line,
+                class_info.column,
+                format!("{config_class_name} should inherit from pydantic.BaseModel."),
+            ));
+        }
+
+        if config_attr_name == "valves" && !class_info.init_assignments.contains(config_attr_name) {
+            issues.push(issue(
+                OWUI022,
+                path,
+                class_info.line,
+                class_info.column,
                 format!(
-                    "Valves field '{}' looks sensitive but is not masked. \
-                     Add json_schema_extra={{\"input\": {{\"type\": \"password\"}}}} to the Field().",
-                    field.name
+                    "Initialize {config_attr_name} in __init__ with self.{config_attr_name} = self.{config_class_name}()."
                 ),
             ));
+        }
+
+        for field in &config.fields {
+            if is_sensitive_field_name(&field.name) && !field.has_password_type {
+                issues.push(issue(
+                    OWUI023,
+                    path,
+                    field.line,
+                    1,
+                    format!(
+                        "{config_class_name} field '{}' looks sensitive but is not masked. \
+                         Add json_schema_extra={{\"input\": {{\"type\": \"password\"}}}} to the Field().",
+                        field.name
+                    ),
+                ));
+            }
         }
     }
 
@@ -311,9 +323,36 @@ const SENSITIVE_PATTERNS: &[&str] = &[
 ];
 
 fn is_sensitive_field_name(name: &str) -> bool {
+    // Allow common metrics/control names that include token-related words.
+    if name.contains("token_count")
+        || name.contains("tokens_per_")
+        || name.contains("token_per_")
+        || name.contains("token_rate")
+        || name.contains("token_usage")
+    {
+        return false;
+    }
+
     SENSITIVE_PATTERNS
         .iter()
-        .any(|pattern| name.contains(pattern))
+        .any(|pattern| contains_with_token_boundaries(name, pattern))
+}
+
+fn contains_with_token_boundaries(value: &str, token: &str) -> bool {
+    value.match_indices(token).any(|(start, _)| {
+        let end = start + token.len();
+        let prev_ok = value
+            .get(..start)
+            .and_then(|prefix| prefix.chars().next_back())
+            .map(|ch| !ch.is_ascii_alphanumeric())
+            .unwrap_or(true);
+        let next_ok = value
+            .get(end..)
+            .and_then(|suffix| suffix.chars().next())
+            .map(|ch| !ch.is_ascii_alphanumeric())
+            .unwrap_or(true);
+        prev_ok && next_ok
+    })
 }
 
 fn lint_tools(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
@@ -441,6 +480,42 @@ fn lint_filter(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
         ));
     }
 
+    if let Some(inlet) = inlet
+        && !has_param(inlet, "body")
+    {
+        issues.push(issue(
+            OWF303,
+            path,
+            inlet.line,
+            inlet.column,
+            "Filter.inlet should accept a `body` parameter.",
+        ));
+    }
+
+    if let Some(outlet) = outlet
+        && !has_param(outlet, "body")
+    {
+        issues.push(issue(
+            OWF303,
+            path,
+            outlet.line,
+            outlet.column,
+            "Filter.outlet should accept a `body` parameter.",
+        ));
+    }
+
+    if let Some(stream) = stream
+        && !has_param(stream, "event")
+    {
+        issues.push(issue(
+            OWF304,
+            path,
+            stream.line,
+            stream.column,
+            "Filter.stream should accept an `event` parameter.",
+        ));
+    }
+
     issues
 }
 
@@ -464,6 +539,16 @@ fn lint_action(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
             action.line,
             action.column,
             "Action.action should be async.",
+        ));
+    }
+
+    if !has_param(action, "body") {
+        issues.push(issue(
+            OWA402,
+            path,
+            action.line,
+            action.column,
+            "Action.action should accept a `body` parameter.",
         ));
     }
 
@@ -574,6 +659,10 @@ fn lint_module_header(path: &Path, module: &ModuleInfo) -> Vec<Issue> {
     }
 
     issues
+}
+
+fn has_param(method: &crate::models::FunctionInfo, name: &str) -> bool {
+    method.args.iter().any(|arg| arg == name)
 }
 
 fn included(path: &Path, cwd: &Path, include: &[String], exclude: &[String]) -> bool {

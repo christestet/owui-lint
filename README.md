@@ -21,6 +21,13 @@
 - `Action`
 - `Pipeline`
 
+## Scope and Limits
+
+- `owui-lint` uses a lightweight Python scanner for basic delimiter/string issues (`OWUI001`).
+- It is intentionally **not** a full Python grammar parser.
+- For full syntax verification, run `python -m py_compile <file.py>`.
+- The primary focus is Open WebUI-specific semantics: extension type structure, Valves/UserValves usage, reserved-args/signature compatibility, and extension hook contracts.
+
 ## Architecture
 
 - Native binary distribution (`owui-lint`)
@@ -197,7 +204,7 @@ Run `owui-lint explain <RULE_ID>` for per-rule details and remediation advice.
 
 | Rule | Severity | Title | What it checks |
 |------|----------|-------|----------------|
-| `OWUI001` | error | Python syntax error | File cannot be parsed as valid Python |
+| `OWUI001` | error | Basic Python scan failed | Lightweight delimiter/string scan found an issue (not full grammar validation) |
 | `OWUI010` | warning | No extension class detected | File looks like an extension but has no `Tools`/`Pipe`/`Filter`/`Action`/`Pipeline` class |
 | `OWUI011` | error | Mixed extension types | More than one extension class in a single file |
 | `OWUI020` | warning | Missing Valves class | No inner `Valves` class for runtime configuration |

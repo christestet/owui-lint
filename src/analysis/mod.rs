@@ -519,6 +519,37 @@ mod tests {
         fs::remove_dir_all(dir).expect("test directory should be removed");
     }
 
+    #[test]
+    fn multiline_string_content_does_not_create_phantom_methods() {
+        let dir = test_dir("multiline_context");
+        let path = dir.join("filter.py");
+        fs::write(
+            &path,
+            "class Filter:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.note = \"\"\"\ndedented line\n    def inlet(self, body):\n        pass\n\"\"\"\n\n    def inlet(self, body):\n        return body\n",
+        )
+        .expect("test file should be written");
+
+        let module = analyze_file(&path);
+        assert!(module.syntax_ok);
+        let filter = module
+            .classes
+            .iter()
+            .find(|item| item.name == "Filter")
+            .expect("Filter class should be found");
+        assert_eq!(filter.methods.len(), 2, "methods: {:?}", filter.methods);
+        let inlet = filter
+            .methods
+            .iter()
+            .find(|method| method.name == "inlet")
+            .expect("inlet should be collected");
+        assert_eq!(
+            inlet.line, 12,
+            "inlet should be collected from the actual method, not from triple-quoted content"
+        );
+
+        fs::remove_dir_all(dir).expect("test directory should be removed");
+    }
+
     fn test_dir(prefix: &str) -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!(
             "owui_lint_analysis_{prefix}_{}_{}",
