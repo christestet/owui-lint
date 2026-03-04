@@ -4,7 +4,7 @@ target/
 # Reports
 owui-lint.sarif
 owui-lint-report.json
-bin/
+/bin/
 
 # OS / editor
 .DS_Store
