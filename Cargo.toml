@@ -18,9 +18,9 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.102"
-clap = { version = "4.5.60", features = ["derive"] }
+clap = { version = "4.6.1", features = ["derive"] }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
+serde_json = "1.0.150"
 ureq = "3"
 walkdir = "2.5.0"
 
@@ -47,4 +47,4 @@ targets = [
 ]
 
 [dev-dependencies]
-tempfile = "3.26.0"
+tempfile = "3.27.0"
