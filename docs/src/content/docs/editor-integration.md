@@ -21,14 +21,24 @@ The server provides Open WebUI-specific intelligence on top of a general Python 
 
 ## VS Code Extension
 
-The repository includes a VS Code extension under `editors/vscode/`. It activates on Python files (`onLanguage:python`) and launches `owui-lint server` over stdio.
+The VS Code extension activates on Python files (`onLanguage:python`) and launches `owui-lint server` over stdio. It does not bundle the CLI binary, so install `owui-lint` first.
 
-```bash
-npm install --prefix editors/vscode
-npm run compile --prefix editors/vscode
-```
+### Install
 
-Press <kbd>F5</kbd> in VS Code to launch an Extension Development Host.
+The extension is packaged as a `.vsix` release asset:
+
+1. Download the `.vsix` from the [latest release](https://github.com/christestet/owui-lint/releases/latest).
+2. In VS Code, run **Extensions: Install from VSIX...**.
+3. Open a Python file containing an Open WebUI extension.
+
+If VS Code cannot find the binary, set `owui-lint.path` to an absolute path.
+
+### Features
+
+- Live diagnostics for the same `OWUI*`, `OWT*`, `OWP*`, `OWF*`, `OWA*`, and `OWPL*` rules used by the CLI.
+- Hover documentation on finding lines, including the rule summary, remediation, documentation link, and minimum Open WebUI version.
+- Completion snippets for module headers, extension class skeletons, `Valves`/`UserValves`, and common handler methods.
+- Quick fixes for async handlers, missing tool docstrings, missing `title`/`version` header fields, and project-wide rule disables.
 
 ### Settings
 
@@ -40,6 +50,23 @@ Press <kbd>F5</kbd> in VS Code to launch an Extension Development Host.
 ### Commands
 
 - **owui-lint: Restart Language Server** (`owui-lint.restartServer`) — stops and restarts the language server process without reloading VS Code.
+
+### Troubleshooting
+
+- If no diagnostics appear, confirm the file language mode is Python and run `owui-lint path/to/file.py` in a terminal.
+- If the server cannot start, set `owui-lint.path` to the absolute binary path and run **owui-lint: Restart Language Server**.
+- If Python syntax errors are missing, enable a Python language server such as Pylance or Pyright; `owui-lint` only reports Open WebUI-specific issues.
+
+## Extension Development
+
+The extension source lives under `editors/vscode/`.
+
+```bash
+npm install --prefix editors/vscode
+npm run compile --prefix editors/vscode
+```
+
+Press <kbd>F5</kbd> in VS Code to launch an Extension Development Host.
 
 ## Other Editors
 
