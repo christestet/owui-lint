@@ -20,6 +20,7 @@ The server provides Open WebUI-specific intelligence on top of a general Python 
   - *At top level (no indentation)* — class skeleton snippets: `owui-tools`, `owui-pipe`, `owui-filter`, `owui-action`, `owui-pipeline`.
   - *Inside a class body (indented)* — class member snippets: `Valves`, `UserValves`, `pipe-method`, `inlet-method`, `outlet-method`, `action-method`.
 - **Quick fixes** — make a handler `async` (OWT102, OWP202, OWA401), add a docstring stub (OWT101), add a missing module-header field (OWUI030 `version`, OWUI032 `title`), or disable a rule for the project.
+- **Logging** — operational events (startup, per-file lint summaries, recoverable errors) are sent via `window/logMessage` to the editor's output channel, filtered by the client's log/trace level.
 
 ## VS Code Extension
 
@@ -52,9 +53,11 @@ If VS Code cannot find the binary, set `owui-lint.path` to an absolute path.
 ### Commands
 
 - **owui-lint: Restart Language Server** (`owui-lint.restartServer`) — stops and restarts the language server process without reloading VS Code.
+- **owui-lint: Show Output** (`owui-lint.showOutput`) — reveals the server's output channel, where `window/logMessage` entries and (when `owui-lint.trace.server` is `messages`/`verbose`) the LSP message trace appear.
 
 ### Troubleshooting
 
+- For a closer look at what the server is doing, run **owui-lint: Show Output** and set `owui-lint.trace.server` to `messages` or `verbose`.
 - If no diagnostics appear, confirm the file language mode is Python and run `owui-lint path/to/file.py` in a terminal.
 - If the server cannot start, set `owui-lint.path` to the absolute binary path and run **owui-lint: Restart Language Server**.
 - If Python syntax errors are missing, enable a Python language server such as Pylance or Pyright; `owui-lint` only reports Open WebUI-specific issues.

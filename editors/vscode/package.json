@@ -22,6 +22,10 @@
       {
         "command": "owui-lint.restartServer",
         "title": "owui-lint: Restart Language Server"
+      },
+      {
+        "command": "owui-lint.showOutput",
+        "title": "owui-lint: Show Output"
       }
     ],
     "configuration": {

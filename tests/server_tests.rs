@@ -13,7 +13,7 @@ use lsp_types::{
     CodeActionResponse, Diagnostic, DiagnosticWorkspaceClientCapabilities,
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
     DocumentDiagnosticParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
-    ExecuteCommandParams, InitializeParams, InitializeResult, NumberOrString,
+    ExecuteCommandParams, InitializeParams, InitializeResult, LogMessageParams, NumberOrString,
     PublishDiagnosticsParams, TextDocumentContentChangeEvent, TextDocumentIdentifier,
     TextDocumentItem, Uri, VersionedTextDocumentIdentifier, WorkspaceClientCapabilities,
 };
@@ -382,6 +382,34 @@ fn execute_command_requests_diagnostic_refresh_only_when_supported() {
         );
 
         shutdown(&client, server, 11);
+    }
+}
+
+/// The server reports operational events (startup, lint summaries, errors) via
+/// `window/logMessage`, which editors surface in their output channel.
+#[test]
+fn server_logs_startup_to_output_channel() {
+    let (client, server) = spawn_server();
+    handshake(&client, None);
+
+    let log = recv_log_message(&client);
+    assert!(
+        log.message.contains("owui-lint") && log.message.contains("started"),
+        "expected a startup log message, got {:?}",
+        log.message
+    );
+
+    shutdown(&client, server, 2);
+}
+
+/// Wait for the next `window/logMessage` notification and return its params.
+fn recv_log_message(client: &Connection) -> LogMessageParams {
+    loop {
+        if let Message::Notification(notification) = recv(client)
+            && notification.method == "window/logMessage"
+        {
+            return serde_json::from_value(notification.params).expect("logMessage params");
+        }
     }
 }
 

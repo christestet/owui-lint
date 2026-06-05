@@ -19,8 +19,8 @@ mod state;
 use anyhow::{Context, Result};
 use lsp_server::{Connection, ErrorCode, Message, RequestId, Response, ResponseError};
 use lsp_types::notification::{
-    DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Notification as _,
-    PublishDiagnostics, ShowMessage,
+    DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, LogMessage,
+    Notification as _, PublishDiagnostics, ShowMessage,
 };
 use lsp_types::request::{
     CodeActionRequest, Completion, DocumentDiagnosticRequest, ExecuteCommand, HoverRequest,
@@ -32,9 +32,9 @@ use lsp_types::{
     DidOpenTextDocumentParams, DocumentDiagnosticParams, DocumentDiagnosticReport,
     DocumentDiagnosticReportResult, ExecuteCommandOptions, ExecuteCommandParams,
     FullDocumentDiagnosticReport, HoverProviderCapability, InitializeParams, InitializeResult,
-    MessageType, PublishDiagnosticsParams, RelatedFullDocumentDiagnosticReport, ServerCapabilities,
-    ServerInfo, ShowMessageParams, TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
-    WorkDoneProgressOptions,
+    LogMessageParams, MessageType, PublishDiagnosticsParams, RelatedFullDocumentDiagnosticReport,
+    ServerCapabilities, ServerInfo, ShowMessageParams, TextDocumentSyncCapability,
+    TextDocumentSyncKind, Uri, WorkDoneProgressOptions,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -80,6 +80,15 @@ pub fn serve(connection: &Connection) -> Result<()> {
 
     let mut state = ServerState::new(workspace_root(&init_params));
     state.set_diagnostic_refresh_support(client_supports_diagnostic_refresh(&init_params));
+    log_message(
+        connection,
+        MessageType::INFO,
+        format!(
+            "{} {} started",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION")
+        ),
+    )?;
     main_loop(connection, &mut state)
 }
 
@@ -147,12 +156,20 @@ fn main_loop(connection: &Connection, state: &mut ServerState) -> Result<()> {
                 // tear down the whole session: log it and keep serving. The
                 // client has already received an error response where relevant.
                 if let Err(err) = dispatch_request(connection, state, request) {
-                    eprintln!("owui-lint: error handling request: {err:#}");
+                    let _ = log_message(
+                        connection,
+                        MessageType::ERROR,
+                        format!("error handling request: {err:#}"),
+                    );
                 }
             }
             Message::Notification(notification) => {
                 if let Err(err) = dispatch_notification(connection, state, notification) {
-                    eprintln!("owui-lint: error handling notification: {err:#}");
+                    let _ = log_message(
+                        connection,
+                        MessageType::ERROR,
+                        format!("error handling notification: {err:#}"),
+                    );
                 }
             }
             Message::Response(_) => {}
@@ -274,12 +291,17 @@ fn handle_execute_command(
     };
 
     if let Err(err) = disable_rule_in_config(root, rule_id) {
-        let message = format!("owui-lint: failed to update config to disable {rule_id}: {err}");
-        eprintln!("{message}");
+        let message = format!("failed to update config to disable {rule_id}: {err}");
+        log_message(connection, MessageType::ERROR, message.clone())?;
         show_message(connection, MessageType::ERROR, message)?;
         return Ok(());
     }
     state.reload_config();
+    log_message(
+        connection,
+        MessageType::INFO,
+        format!("disabled rule {rule_id}; reloaded config and re-linted open documents"),
+    )?;
 
     // Refresh diagnostics for every open document under the new config (push
     // model). Pull-model clients get a single refresh request instead.
@@ -332,6 +354,11 @@ fn publish_diagnostics(connection: &Connection, state: &ServerState, uri: &Uri) 
         return Ok(());
     };
     let diagnostics = issues_to_diagnostics(&document.issues, &document.text);
+    log_message(
+        connection,
+        MessageType::LOG,
+        format!("linted {}: {} finding(s)", uri.as_str(), diagnostics.len()),
+    )?;
     publish_for(connection, uri, diagnostics, Some(document.version))
 }
 
@@ -411,6 +438,23 @@ fn respond_error(
         .sender
         .send(Message::Response(response))
         .context("failed to send error response")?;
+    Ok(())
+}
+
+/// Send a `window/logMessage` notification. These land in the editor's output
+/// channel (e.g. the "owui-lint" panel in VS Code) and are filtered by the
+/// client's trace/log level, so they are the right place for operational logging
+/// (startup, lint summaries, recoverable errors) that should not pop a dialog.
+fn log_message(connection: &Connection, typ: MessageType, message: String) -> Result<()> {
+    let params = LogMessageParams { typ, message };
+    let notification = lsp_server::Notification {
+        method: LogMessage::METHOD.to_string(),
+        params: serde_json::to_value(params)?,
+    };
+    connection
+        .sender
+        .send(Message::Notification(notification))
+        .context("failed to send logMessage")?;
     Ok(())
 }
 
