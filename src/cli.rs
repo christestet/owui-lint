@@ -47,7 +47,7 @@ struct LintArgs {
         short = 'c',
         long,
         value_name = "PATH",
-        help = "Path to config file (default lookup: config.yml, owui-lint.yml, owui-lint.yaml)."
+        help = "Path to config file (default lookup: config.yml, config.yaml, owui-lint.yml, owui-lint.yaml)."
     )]
     config: Option<PathBuf>,
 

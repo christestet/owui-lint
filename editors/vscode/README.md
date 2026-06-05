@@ -11,8 +11,11 @@ Open WebUI–specific layer:
 - **Hover** explanations with remediation and docs links for each finding.
 - **Quick fixes**: make a handler `async`, add a docstring stub, add missing
   module-header fields, or disable a rule for the project.
-- **Snippets** for Open WebUI scaffolding: class skeletons (`owui-tools`,
-  `owui-pipe`, …), `Valves`/`UserValves`, handler methods, and header fields.
+- **Completions** — live LSP scaffolding snippets for Open WebUI Python files:
+  class skeletons (`owui-tools`, `owui-pipe`, `owui-filter`, `owui-action`,
+  `owui-pipeline`), `Valves`/`UserValves`, handler methods (`pipe-method`,
+  `inlet-method`, `outlet-method`, `action-method`), and module header fields
+  (`version`, `title`, `requirements`, `author`, `description`).
 
 ## Requirements
 
@@ -24,6 +27,17 @@ via the `owui-lint.path` setting.
   "owui-lint.path": "/absolute/path/to/owui-lint"
 }
 ```
+
+### Settings
+
+| Setting | Default | Description |
+|---|---|---|
+| `owui-lint.path` | `owui-lint` | Path to the `owui-lint` executable. |
+| `owui-lint.trace.server` | `off` | LSP trace level: `off`, `messages`, or `verbose`. |
+
+### Commands
+
+- **owui-lint: Restart Language Server** (`owui-lint.restartServer`) — restarts the language server without reloading VS Code.
 
 ## Develop / run locally
 
