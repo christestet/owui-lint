@@ -1,5 +1,9 @@
+// `lsp_types::Uri` keys (see note in `src/server/mod.rs`).
+#![allow(clippy::mutable_key_type)]
+
 use std::collections::HashMap;
 use std::path::Path;
+use std::str::FromStr;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -8,7 +12,7 @@ use lsp_types::{
     CodeAction, CodeActionContext, CodeActionOrCommand, CodeActionParams, CodeActionResponse,
     Diagnostic, DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
     ExecuteCommandParams, InitializeParams, NumberOrString, PublishDiagnosticsParams,
-    TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem, Url,
+    TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem, Uri,
     VersionedTextDocumentIdentifier,
 };
 
@@ -39,7 +43,7 @@ fn server_publishes_diagnostics_and_offers_quick_fix() {
     send_notification(&client_conn, "initialized", serde_json::json!({}));
 
     // --- open a Tools document ---
-    let uri = Url::parse("file:///tmp/owui_lsp_test_tools.py").expect("valid uri");
+    let uri = Uri::from_str("file:///tmp/owui_lsp_test_tools.py").expect("valid uri");
     send_notification(
         &client_conn,
         "textDocument/didOpen",
@@ -140,8 +144,8 @@ fn execute_command_disables_rule_and_refreshes_open_documents() {
     handshake(&client, Some(workspace.path()));
 
     // Open two Tools documents; both report OWT102.
-    let uri_a = Url::parse("file:///tmp/owui_cmd_a.py").expect("uri a");
-    let uri_b = Url::parse("file:///tmp/owui_cmd_b.py").expect("uri b");
+    let uri_a = Uri::from_str("file:///tmp/owui_cmd_a.py").expect("uri a");
+    let uri_b = Uri::from_str("file:///tmp/owui_cmd_b.py").expect("uri b");
     open_document(&client, &uri_a, TOOLS_SOURCE);
     assert!(
         codes(&recv_publish(&client).diagnostics).contains(&"OWT102".to_string()),
@@ -167,7 +171,7 @@ fn execute_command_disables_rule_and_refreshes_open_documents() {
     );
 
     // The server republishes diagnostics for both open documents before replying.
-    let mut refreshed: HashMap<Url, Vec<String>> = HashMap::new();
+    let mut refreshed: HashMap<Uri, Vec<String>> = HashMap::new();
     for _ in 0..2 {
         let params = recv_publish(&client);
         refreshed.insert(params.uri, codes(&params.diagnostics));
@@ -178,12 +182,12 @@ fn execute_command_disables_rule_and_refreshes_open_documents() {
         let codes = refreshed.get(uri).expect("refreshed diagnostics for doc");
         assert!(
             !codes.contains(&"OWT102".to_string()),
-            "OWT102 should be silenced for {uri} after disable, got {codes:?}"
+            "OWT102 should be silenced for {uri:?} after disable, got {codes:?}"
         );
         // OWT101 is unaffected, proving we re-linted rather than cleared.
         assert!(
             codes.contains(&"OWT101".to_string()),
-            "OWT101 should remain for {uri}, got {codes:?}"
+            "OWT101 should remain for {uri:?}, got {codes:?}"
         );
     }
 
@@ -201,7 +205,7 @@ fn did_change_relints_updated_buffer() {
     let (client, server) = spawn_server();
     handshake(&client, None);
 
-    let uri = Url::parse("file:///tmp/owui_change.py").expect("uri");
+    let uri = Uri::from_str("file:///tmp/owui_change.py").expect("uri");
     open_document(&client, &uri, TOOLS_SOURCE);
     assert!(
         codes(&recv_publish(&client).diagnostics).contains(&"OWT102".to_string()),
@@ -244,7 +248,7 @@ fn did_close_clears_diagnostics() {
     let (client, server) = spawn_server();
     handshake(&client, None);
 
-    let uri = Url::parse("file:///tmp/owui_close.py").expect("uri");
+    let uri = Uri::from_str("file:///tmp/owui_close.py").expect("uri");
     open_document(&client, &uri, TOOLS_SOURCE);
     assert!(
         !recv_publish(&client).diagnostics.is_empty(),
@@ -292,13 +296,24 @@ fn spawn_server() -> (Connection, JoinHandle<()>) {
     (client_conn, server)
 }
 
+/// Build a `file://` URI from a filesystem path. `lsp_types::Uri` (fluent-uri)
+/// has no path constructor, so go through the `url` crate.
+fn file_uri(path: &Path) -> Uri {
+    Uri::from_str(
+        url::Url::from_file_path(path)
+            .expect("absolute file path")
+            .as_str(),
+    )
+    .expect("valid file uri")
+}
+
 /// Perform the initialize/initialized handshake, optionally advertising a
 /// workspace root (needed for config-writing commands).
 fn handshake(client: &Connection, root: Option<&Path>) {
     let init_id = RequestId::from(1);
     #[allow(deprecated)]
     let params = InitializeParams {
-        root_uri: root.map(|path| Url::from_file_path(path).expect("file uri for root")),
+        root_uri: root.map(file_uri),
         ..InitializeParams::default()
     };
     send_request(client, init_id.clone(), "initialize", params);
@@ -307,7 +322,7 @@ fn handshake(client: &Connection, root: Option<&Path>) {
 }
 
 /// Open a document and let the server lint it.
-fn open_document(client: &Connection, uri: &Url, text: &str) {
+fn open_document(client: &Connection, uri: &Uri, text: &str) {
     send_notification(
         client,
         "textDocument/didOpen",
@@ -337,7 +352,7 @@ fn shutdown(client: &Connection, server: JoinHandle<()>, id: i32) {
 }
 
 /// Pull the first `TextEdit` a code action applies to `uri`.
-fn first_text_edit(action: &CodeAction, uri: &Url) -> lsp_types::TextEdit {
+fn first_text_edit(action: &CodeAction, uri: &Uri) -> lsp_types::TextEdit {
     action
         .edit
         .as_ref()

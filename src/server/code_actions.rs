@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use lsp_types::{
     CodeAction, CodeActionOrCommand, CodeActionParams, CodeActionResponse, Command, Diagnostic,
-    NumberOrString, Position, Range, TextEdit, Url, WorkspaceEdit,
+    NumberOrString, Position, Range, TextEdit, Uri, WorkspaceEdit,
 };
 
 use crate::server::diagnostics::DIAGNOSTIC_SOURCE;
@@ -62,7 +62,7 @@ fn owui_rule_id(diagnostic: &Diagnostic) -> Option<&str> {
 }
 
 fn fix_for_rule(
-    uri: &Url,
+    uri: &Uri,
     lines: &[&str],
     diagnostic: &Diagnostic,
     rule_id: &str,
@@ -81,7 +81,7 @@ fn fix_for_rule(
 }
 
 fn async_fix(
-    uri: &Url,
+    uri: &Uri,
     lines: &[&str],
     diagnostic: &Diagnostic,
     line_idx: usize,
@@ -97,7 +97,7 @@ fn async_fix(
 }
 
 fn docstring_fix(
-    uri: &Url,
+    uri: &Uri,
     lines: &[&str],
     diagnostic: &Diagnostic,
     line_idx: usize,
@@ -126,7 +126,7 @@ fn docstring_fix(
 }
 
 fn header_field_fix(
-    uri: &Url,
+    uri: &Uri,
     lines: &[&str],
     diagnostic: &Diagnostic,
     docstring_line_idx: usize,
@@ -166,8 +166,8 @@ fn header_field_fix(
     Some(quickfix(uri, &title, diagnostic, edit))
 }
 
-fn quickfix(uri: &Url, title: &str, diagnostic: &Diagnostic, edit: TextEdit) -> CodeAction {
-    let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+fn quickfix(uri: &Uri, title: &str, diagnostic: &Diagnostic, edit: TextEdit) -> CodeAction {
+    let mut changes: HashMap<Uri, Vec<TextEdit>> = HashMap::new();
     changes.insert(uri.clone(), vec![edit]);
     CodeAction {
         title: title.to_string(),
@@ -228,14 +228,16 @@ pub fn disable_rule_in_config(root: &Path, rule_id: &str) -> std::io::Result<Pat
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
     use lsp_types::{
         CodeActionContext, CodeActionParams, NumberOrString, PartialResultParams,
         TextDocumentIdentifier, WorkDoneProgressParams,
     };
 
-    fn uri() -> Url {
-        Url::parse("file:///tmp/owui_code_action_test.py").expect("valid uri")
+    fn uri() -> Uri {
+        Uri::from_str("file:///tmp/owui_code_action_test.py").expect("valid uri")
     }
 
     /// Build an owui-lint diagnostic for `rule_id` anchored at `line` (0-indexed).

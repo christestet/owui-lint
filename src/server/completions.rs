@@ -185,10 +185,12 @@ fn class_member_items() -> Vec<CompletionItem> {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
     use lsp_types::{
         CompletionParams, PartialResultParams, Position, TextDocumentIdentifier,
-        TextDocumentPositionParams, Url, WorkDoneProgressParams,
+        TextDocumentPositionParams, Uri, WorkDoneProgressParams,
     };
 
     const MULTILINE_DOC: &str =
@@ -228,7 +230,7 @@ mod tests {
     }
 
     fn completion_at(source: &str, line: u32) -> Vec<CompletionItem> {
-        let uri = Url::parse("file:///tmp/owui_completion_test.py").expect("valid uri");
+        let uri = Uri::from_str("file:///tmp/owui_completion_test.py").expect("valid uri");
         let mut state = ServerState::new(None);
         state.upsert(uri.clone(), source.to_string(), 1);
 
@@ -281,7 +283,7 @@ mod tests {
 
     #[test]
     fn completion_none_for_unknown_document() {
-        let uri = Url::parse("file:///tmp/owui_unknown.py").expect("valid uri");
+        let uri = Uri::from_str("file:///tmp/owui_unknown.py").expect("valid uri");
         let state = ServerState::new(None);
         let params = CompletionParams {
             text_document_position: TextDocumentPositionParams {

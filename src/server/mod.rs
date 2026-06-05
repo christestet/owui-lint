@@ -4,6 +4,11 @@
 //! is editing and complements (does not replace) a general Python language
 //! server such as Pylance/Pyright. It speaks LSP over stdio via `lsp-server`.
 
+// `lsp_types::Uri` (fluent-uri) carries an internal cache cell, so Clippy's
+// `mutable_key_type` lint fires when we key maps by it. Its `Hash`/`Eq` use the
+// stable string form (`as_str()`), so using it as a map key is sound.
+#![allow(clippy::mutable_key_type)]
+
 mod code_actions;
 mod completions;
 mod diagnostics;
@@ -25,14 +30,14 @@ use lsp_types::{
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, ExecuteCommandOptions,
     ExecuteCommandParams, HoverProviderCapability, InitializeParams, MessageType,
     PublishDiagnosticsParams, ServerCapabilities, ShowMessageParams, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Url,
+    TextDocumentSyncKind, Uri,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::server::code_actions::{DISABLE_RULE_COMMAND, disable_rule_in_config};
 use crate::server::diagnostics::issues_to_diagnostics;
-use crate::server::state::ServerState;
+use crate::server::state::{ServerState, uri_to_file_path};
 
 /// Run the language server over stdio until the client shuts it down.
 pub fn run() -> Result<()> {
@@ -81,15 +86,12 @@ fn server_capabilities() -> ServerCapabilities {
 fn workspace_root(params: &InitializeParams) -> Option<std::path::PathBuf> {
     if let Some(folders) = &params.workspace_folders
         && let Some(first) = folders.first()
-        && let Ok(path) = first.uri.to_file_path()
+        && let Some(path) = uri_to_file_path(&first.uri)
     {
         return Some(path);
     }
     #[allow(deprecated)]
-    params
-        .root_uri
-        .as_ref()
-        .and_then(|uri| uri.to_file_path().ok())
+    params.root_uri.as_ref().and_then(uri_to_file_path)
 }
 
 fn main_loop(connection: &Connection, state: &mut ServerState) -> Result<()> {
@@ -238,7 +240,7 @@ fn handle_execute_command(
     Ok(())
 }
 
-fn publish_diagnostics(connection: &Connection, state: &ServerState, uri: &Url) -> Result<()> {
+fn publish_diagnostics(connection: &Connection, state: &ServerState, uri: &Uri) -> Result<()> {
     let Some(document) = state.document(uri) else {
         return Ok(());
     };
@@ -248,7 +250,7 @@ fn publish_diagnostics(connection: &Connection, state: &ServerState, uri: &Url) 
 
 fn publish_for(
     connection: &Connection,
-    uri: &Url,
+    uri: &Uri,
     diagnostics: Vec<lsp_types::Diagnostic>,
     version: Option<i32>,
 ) -> Result<()> {
