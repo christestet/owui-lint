@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/christestet/owui-lint/compare/v0.7.1...v0.8.0) (2026-06-05)
+
+
+### Features
+
+* **server:** LSP 3.17 pull diagnostics, logMessage logging, and editor setup docs ([#50](https://github.com/christestet/owui-lint/issues/50)) ([a9ee6d4](https://github.com/christestet/owui-lint/commit/a9ee6d4bb4a822c8a70c57f12e1c9c183c7d6a1d))
+
 ## [0.7.1](https://github.com/christestet/owui-lint/compare/v0.7.0...v0.7.1) (2026-06-05)
 
 
