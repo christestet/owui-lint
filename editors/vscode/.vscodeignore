@@ -5,4 +5,5 @@ tsconfig.json
 .gitignore
 **/*.map
 **/*.ts
+owui-lint-icon.svg
 !out/**/*.js

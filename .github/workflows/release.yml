@@ -1,26 +1,52 @@
-# CI that builds release binaries via cargo-dist.
-# Triggered on push of v* tags (e.g. v0.1.0).
+# Release automation.
 #
-# Auto-generated-like workflow for cargo-dist v0.31.0
-# https://opensource.axo.dev/cargo-dist/
+# release-please watches `main` and opens a release PR (version bump + CHANGELOG)
+# driven by Conventional Commits. Merging that PR creates the tag + GitHub Release,
+# which triggers the build matrix to attach prebuilt binaries, checksums and
+# installer scripts. `workflow_dispatch` can rebuild assets for an existing tag.
 
 name: Release
 
-permissions:
-  contents: write
-
 on:
   push:
-    tags:
-      - 'v[0-9]+.*'
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Existing tag to build and upload, for example v0.6.1"
+        required: false
+        type: string
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Build matrix: one job per target triple.
+  release-please:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.tag_name == '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # Build matrix: one job per target triple. Runs only when a release was just
+  # created (release_created) or when manually dispatched for an existing tag.
   build:
     name: Build – ${{ matrix.target }}
+    needs: release-please
+    if: ${{ always() && (needs.release-please.outputs.release_created == 'true' || inputs.tag_name != '') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -42,6 +68,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag_name || needs.release-please.outputs.tag_name }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -81,19 +109,43 @@ jobs:
           name: dist-${{ matrix.target }}
           path: owui-lint-${{ matrix.target }}.*
 
-  # Generate checksums and create GitHub Release.
+  # Generate checksums, copy installer scripts and attach everything to the
+  # release that release-please created (or create it for a dispatched tag).
   release:
     name: Release
-    needs: build
+    needs: [release-please, build]
+    if: ${{ always() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag_name || needs.release-please.outputs.tag_name }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      - name: Package VS Code extension (.vsix)
+        env:
+          TAG_NAME: ${{ inputs.tag_name || needs.release-please.outputs.tag_name }}
+        run: |
+          VERSION="${TAG_NAME#v}"
+          cd editors/vscode
+          # Keep the extension version identical to the crate / release tag.
+          npm version "${VERSION}" --no-git-tag-version --allow-same-version
+          npm ci
+          npx --yes @vscode/vsce package --out "$GITHUB_WORKSPACE/dist/"
 
       - name: Generate SHA-256 checksums
         run: |
@@ -109,15 +161,20 @@ jobs:
           cp scripts/uninstall.ps1 dist/owui-lint-uninstaller.ps1
           chmod +x dist/owui-lint-installer.sh dist/owui-lint-uninstaller.sh
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          generate_release_notes: true
-          files: |
-            dist/owui-lint-*.tar.gz
-            dist/owui-lint-*.zip
-            dist/sha256-checksums.txt
-            dist/owui-lint-installer.sh
-            dist/owui-lint-installer.ps1
-            dist/owui-lint-uninstaller.sh
-            dist/owui-lint-uninstaller.ps1
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ inputs.tag_name || needs.release-please.outputs.tag_name }}
+        run: |
+          gh release view "${TAG_NAME}" >/dev/null 2>&1 || \
+            gh release create "${TAG_NAME}" --title "${TAG_NAME}" --generate-notes
+          gh release upload "${TAG_NAME}" \
+            dist/owui-lint-*.tar.gz \
+            dist/owui-lint-*.zip \
+            dist/owui-lint-*.vsix \
+            dist/sha256-checksums.txt \
+            dist/owui-lint-installer.sh \
+            dist/owui-lint-installer.ps1 \
+            dist/owui-lint-uninstaller.sh \
+            dist/owui-lint-uninstaller.ps1 \
+            --clobber
