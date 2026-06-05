@@ -1,6 +1,6 @@
 ---
 name: rust-anti-patterns
-description: "Use when reviewing code for anti-patterns. Keywords: anti-pattern, common mistake, pitfall, code smell, bad practice, code review, is this an anti-pattern, better way to do this, common mistake to avoid, why is this bad, idiomatic way, beginner mistake, fighting borrow checker, clone everywhere, unwrap in production, should I refactor
+description: "Use when reviewing code for anti-patterns and when the user asks you for code design advice."
 ---
 
 # Anti-Patterns
