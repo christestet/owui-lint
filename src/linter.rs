@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, anyhow};
 use walkdir::WalkDir;
 
-use crate::analysis::analyze_file;
+use crate::analysis::{analyze_file, analyze_source};
 use crate::config::Config;
 use crate::glob::glob_match;
 use crate::models::{ClassInfo, Issue, LintSummary, ModuleInfo, Severity, SeverityOverride};
@@ -76,14 +76,7 @@ pub fn lint_files(files: &[PathBuf], config: &Config) -> (Vec<Issue>, LintSummar
         issues.extend(lint_module(&module_info));
     }
 
-    let mut filtered = apply_rule_overrides(issues, config);
-    filtered.sort_by(|left, right| {
-        left.path
-            .cmp(&right.path)
-            .then_with(|| left.line.cmp(&right.line))
-            .then_with(|| left.column.cmp(&right.column))
-            .then_with(|| left.rule_id.cmp(right.rule_id))
-    });
+    let filtered = finalize_issues(issues, config);
 
     let errors = filtered
         .iter()
@@ -102,6 +95,28 @@ pub fn lint_files(files: &[PathBuf], config: &Config) -> (Vec<Issue>, LintSummar
             warnings,
         },
     )
+}
+
+/// Lint a single in-memory source buffer for `path` and return the finalized
+/// issues (rule overrides applied, sorted). This is the entry point used by the
+/// language server, which lints unsaved editor buffers without filesystem reads.
+pub fn lint_source(path: &Path, source: &str, config: &Config) -> Vec<Issue> {
+    let module_info = analyze_source(path, source);
+    finalize_issues(lint_module(&module_info), config)
+}
+
+/// Apply rule-severity overrides and the canonical sort order shared by the CLI
+/// batch path and the language server.
+fn finalize_issues(issues: Vec<Issue>, config: &Config) -> Vec<Issue> {
+    let mut filtered = apply_rule_overrides(issues, config);
+    filtered.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then_with(|| left.line.cmp(&right.line))
+            .then_with(|| left.column.cmp(&right.column))
+            .then_with(|| left.rule_id.cmp(right.rule_id))
+    });
+    filtered
 }
 
 fn apply_rule_overrides(mut issues: Vec<Issue>, config: &Config) -> Vec<Issue> {
@@ -697,4 +712,45 @@ fn normalize_path(path: &Path) -> String {
 fn canonical(path: &Path) -> Result<PathBuf> {
     path.canonicalize()
         .map_err(|err| anyhow!("Failed to resolve {}: {err}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{lint_files, lint_source};
+    use crate::config::Config;
+    use std::fs;
+    use std::path::Path;
+
+    const TOOLS_SOURCE: &str = "class Tools:\n    def search(self, query):\n        return query\n";
+
+    #[test]
+    fn lint_source_matches_lint_files() {
+        let dir = tempfile::tempdir().expect("test directory should be created");
+        let path = dir.path().join("tools.py");
+        fs::write(&path, TOOLS_SOURCE).expect("test file should be written");
+        let canonical_path = path.canonicalize().expect("path should canonicalize");
+
+        let config = Config::default();
+        let (file_issues, _summary) = lint_files(std::slice::from_ref(&canonical_path), &config);
+        let source_issues = lint_source(&canonical_path, TOOLS_SOURCE, &config);
+
+        assert_eq!(file_issues, source_issues);
+        // Sanity: the missing-docstring (OWT101) and non-async (OWT102) rules fire.
+        assert!(source_issues.iter().any(|issue| issue.rule_id == "OWT101"));
+        assert!(source_issues.iter().any(|issue| issue.rule_id == "OWT102"));
+    }
+
+    #[test]
+    fn lint_source_respects_rule_overrides() {
+        let mut config = Config::default();
+        config
+            .rule_overrides
+            .insert("OWT102".to_string(), crate::models::SeverityOverride::Off);
+
+        // `lint_source` analyzes the in-memory buffer and never touches the
+        // filesystem, so a non-existent path is fine — it only labels findings.
+        let issues = lint_source(Path::new("/virtual/tools.py"), TOOLS_SOURCE, &config);
+        assert!(issues.iter().all(|issue| issue.rule_id != "OWT102"));
+        assert!(issues.iter().any(|issue| issue.rule_id == "OWT101"));
+    }
 }

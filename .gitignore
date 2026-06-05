@@ -5,6 +5,10 @@ target/
 owui-lint.sarif
 owui-lint-report.json
 /bin/
+.npm-cache/
+docs/.astro/
+docs/dist/
+docs/node_modules/
 
 # OS / editor
 .DS_Store
