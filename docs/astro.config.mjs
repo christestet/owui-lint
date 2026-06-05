@@ -30,6 +30,7 @@ export default defineConfig({
             { label: 'Overview', slug: 'overview' },
             { label: 'Install', slug: 'install' },
             { label: 'Usage', slug: 'usage' },
+            { label: 'CI Setup', slug: 'ci' },
             { label: 'Configuration', slug: 'configuration' },
             { label: 'Editor Integration', slug: 'editor-integration' },
           ],

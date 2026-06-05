@@ -21,17 +21,7 @@ owui-lint extensions/ --format github
 owui-lint extensions/ --format sarif --output owui-lint.sarif
 ```
 
-Use SARIF with GitHub code scanning:
-
-```yaml
-- name: Run owui-lint
-  run: owui-lint path/to/extensions --format sarif --output owui-lint.sarif
-
-- name: Upload SARIF
-  uses: github/codeql-action/upload-sarif@v3
-  with:
-    sarif_file: owui-lint.sarif
-```
+For GitHub Actions annotations and SARIF code scanning, see [CI Setup](ci/).
 
 ## Exit Behavior
 

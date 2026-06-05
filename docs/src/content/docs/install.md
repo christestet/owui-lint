@@ -48,6 +48,16 @@ Once installed, use the built-in self-update command to fetch and install the la
 owui-lint update
 ```
 
+## VS Code Extension
+
+The VS Code extension is published as a `.vsix` file on the same GitHub release as the CLI binaries. Install the CLI first; the extension launches `owui-lint server` and expects the binary to be on your `PATH` unless configured otherwise.
+
+1. Download the `.vsix` from the [latest release](https://github.com/christestet/owui-lint/releases/latest).
+2. In VS Code, run **Extensions: Install from VSIX...** and select the downloaded file.
+3. Open a Python file containing an Open WebUI extension.
+
+If `owui-lint` is installed somewhere custom, set `owui-lint.path` to the absolute binary path.
+
 ## Uninstall
 
 macOS and Linux:

@@ -286,7 +286,19 @@ If a config contains unknown rule IDs, `owui-lint` warns and shows valid discove
 owui-lint server
 ```
 
-The repository includes a VS Code extension under `editors/vscode/`. Other editors can use a generic LSP client configured to launch `owui-lint server`.
+The repository also ships a VS Code extension as a `.vsix` release asset. Install the `owui-lint` binary first, then install the extension and open a Python file containing an Open WebUI extension.
+
+The extension adds Open WebUI-specific diagnostics, hover details, completions, and quick fixes. It complements Pylance/Pyright; it does not replace general Python syntax checking or IntelliSense.
+
+If the binary is not on your `PATH`, configure:
+
+```jsonc
+{
+  "owui-lint.path": "/absolute/path/to/owui-lint"
+}
+```
+
+Other editors can use a generic LSP client configured to launch `owui-lint server`.
 
 ## Contributing Rules
 
