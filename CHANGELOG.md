@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/christestet/owui-lint/compare/v0.7.0...v0.7.1) (2026-06-05)
+
+
+### Bug Fixes
+
+* **icons:** fix icons on vs code extension and sizeing, add figma file for all assets ([#47](https://github.com/christestet/owui-lint/issues/47)) ([6481a96](https://github.com/christestet/owui-lint/commit/6481a96fd50ba170b2adc5896c6950b9eb5998d6))
+
 ## [0.7.0](https://github.com/christestet/owui-lint/compare/v0.6.2...v0.7.0) (2026-06-05)
 
 
