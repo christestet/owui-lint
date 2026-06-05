@@ -76,13 +76,13 @@ This adds a new constant + `RuleDoc` template to `src/rules.rs` and creates
 
 Run `make test-scripts` to verify the scaffolding script works correctly.
 
-## Keeping README Commands/Rules in Sync
+## Keeping Generated Docs in Sync
 
-`README.md` command and rule reference blocks are generated from live CLI output.
+`README.md` command/rule blocks and the Starlight reference pages are generated from live CLI output.
 
 ```bash
-make docs-sync   # rewrite generated README blocks
-make docs-check  # fail if README is out of date
+make docs-sync   # rewrite README blocks and generated docs site references
+make docs-check  # fail if generated docs are stale or the docs site is invalid
 ```
 
 CI enforces this with `make docs-check`.
@@ -94,6 +94,35 @@ bash scripts/install-git-hook.sh
 ```
 
 The installed hook runs `cargo run --locked --bin docs-sync -- --write` and stages `README.md`.
+
+Generated docs files are committed:
+
+- `README.md`
+- `docs/src/content/docs/reference/cli.md`
+- `docs/src/content/docs/reference/rules.md`
+
+Run `make docs-sync` after changing CLI help text, subcommands, rule metadata, or rule defaults.
+
+## Starlight Docs Site
+
+The GitHub Pages documentation site lives in `docs/` and is built with Astro Starlight. The published repo path is `/owui-lint/`.
+
+```bash
+make docs-site-install
+make docs-site-build
+make docs-site-check
+```
+
+Equivalent npm commands:
+
+```bash
+npm ci --prefix docs
+npm run dev --prefix docs
+npm run build --prefix docs
+npm audit --prefix docs
+```
+
+Keep `docs/package-lock.json` committed. The docs package uses `docs/.npmrc` with exact dependency saves and npm audit enabled so dependency CVEs are visible during local checks.
 
 ### 1) Add rule metadata (`src/rules.rs`)
 

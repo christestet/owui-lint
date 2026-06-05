@@ -6,6 +6,7 @@ pub mod linter;
 pub mod models;
 pub mod output;
 pub mod rules;
+pub mod server;
 pub mod update;
 pub mod util;
 

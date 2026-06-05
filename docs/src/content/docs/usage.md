@@ -1,0 +1,57 @@
+---
+title: Usage
+description: Common owui-lint commands and CI output modes.
+---
+
+Run against one or more files or directories:
+
+```bash
+owui-lint path/to/extensions
+owui-lint tool.py filter.py
+```
+
+Directories are scanned recursively for Python files using the active include and exclude patterns.
+
+## Output Formats
+
+```bash
+owui-lint extensions/ --format text
+owui-lint extensions/ --format json --output owui-lint.json
+owui-lint extensions/ --format github
+owui-lint extensions/ --format sarif --output owui-lint.sarif
+```
+
+Use SARIF with GitHub code scanning:
+
+```yaml
+- name: Run owui-lint
+  run: owui-lint path/to/extensions --format sarif --output owui-lint.sarif
+
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: owui-lint.sarif
+```
+
+## Exit Behavior
+
+```bash
+owui-lint extensions/ --fail-on error
+owui-lint extensions/ --fail-on warning
+owui-lint extensions/ --fail-on none
+```
+
+Exit codes:
+
+- `0`: no configured failure condition was met
+- `1`: the configured `--fail-on` condition was met
+- `2`: usage, configuration, or runtime error
+
+## Rule Discovery
+
+```bash
+owui-lint rules
+owui-lint explain OWT101
+```
+
+The generated [CLI reference](../reference/cli/) lists every command from live `--help` output.

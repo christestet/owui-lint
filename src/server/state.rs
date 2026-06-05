@@ -1,0 +1,211 @@
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use lsp_types::Url;
+
+use crate::config::{Config, load_config_in_dir};
+use crate::linter::lint_source;
+use crate::models::Issue;
+
+/// An open document tracked by the language server. The server keeps the full
+/// text in memory (sync kind FULL) so it can lint unsaved buffers. The lint
+/// `issues` are computed once per `(text, config)` and cached here, so every
+/// feature (diagnostics, hover, ...) reads a single consistent result instead
+/// of re-linting per request.
+#[derive(Debug, Clone)]
+pub struct Document {
+    pub text: String,
+    pub version: i32,
+    pub issues: Vec<Issue>,
+}
+
+/// Mutable server state: open documents plus the workspace configuration.
+#[derive(Debug)]
+pub struct ServerState {
+    documents: HashMap<Url, Document>,
+    root: Option<PathBuf>,
+    config: Config,
+}
+
+impl ServerState {
+    /// Build state for a workspace root, loading its config (or defaults).
+    pub fn new(root: Option<PathBuf>) -> Self {
+        let config = match &root {
+            Some(dir) => load_config_in_dir(dir).unwrap_or_default(),
+            None => Config::default(),
+        };
+        Self {
+            documents: HashMap::new(),
+            root,
+            config,
+        }
+    }
+
+    /// Read accessor for the active config. Linting now happens inside the state
+    /// (see `upsert`), so only tests inspect the config directly.
+    #[cfg(test)]
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    pub fn root(&self) -> Option<&Path> {
+        self.root.as_deref()
+    }
+
+    pub fn document(&self, uri: &Url) -> Option<&Document> {
+        self.documents.get(uri)
+    }
+
+    /// All currently open document URIs (used to refresh diagnostics).
+    pub fn open_uris(&self) -> Vec<Url> {
+        self.documents.keys().cloned().collect()
+    }
+
+    pub fn upsert(&mut self, uri: Url, text: String, version: i32) {
+        let issues = lint_source(&uri_to_path(&uri), &text, &self.config);
+        self.documents.insert(
+            uri,
+            Document {
+                text,
+                version,
+                issues,
+            },
+        );
+    }
+
+    /// Record a new document version without changing its text or re-linting.
+    /// Used for `didChange` notifications that carry no content (FULL sync still
+    /// advances the version even when the text is unchanged).
+    pub fn set_version(&mut self, uri: &Url, version: i32) {
+        if let Some(document) = self.documents.get_mut(uri) {
+            document.version = version;
+        }
+    }
+
+    pub fn remove(&mut self, uri: &Url) {
+        self.documents.remove(uri);
+    }
+
+    /// Reload configuration from the workspace root, e.g. after a quick-fix
+    /// wrote a rule override to the config file, then re-lint every open
+    /// document so cached issues reflect the new config.
+    pub fn reload_config(&mut self) {
+        if let Some(dir) = &self.root {
+            self.config = load_config_in_dir(dir).unwrap_or_default();
+        }
+        let Self {
+            documents, config, ..
+        } = self;
+        for (uri, document) in documents.iter_mut() {
+            document.issues = lint_source(&uri_to_path(uri), &document.text, config);
+        }
+    }
+}
+
+/// Convert a `file://` URI to a filesystem path. Diagnostics need a path so the
+/// analyzer can resolve the extension type; for non-file URIs we fall back to a
+/// best-effort path derived from the URI itself.
+pub fn uri_to_path(uri: &Url) -> PathBuf {
+    uri.to_file_path()
+        .unwrap_or_else(|_| PathBuf::from(uri.path()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn uri(s: &str) -> Url {
+        Url::parse(s).expect("valid uri")
+    }
+
+    #[test]
+    fn uri_to_path_handles_file_uri() {
+        let path = uri_to_path(&uri("file:///tmp/owui/tools.py"));
+        assert_eq!(path, PathBuf::from("/tmp/owui/tools.py"));
+        // The `.py` extension survives so the analyzer can detect the file type.
+        assert_eq!(path.extension().and_then(|e| e.to_str()), Some("py"));
+    }
+
+    #[test]
+    fn uri_to_path_falls_back_for_non_file_uri() {
+        // Non-`file://` scheme (e.g. an unsaved/virtual buffer): best-effort path
+        // from the URI path component, still ending in `.py`.
+        let path = uri_to_path(&uri("untitled:/Untitled-1.py"));
+        assert_eq!(path.extension().and_then(|e| e.to_str()), Some("py"));
+    }
+
+    #[test]
+    fn upsert_and_document_roundtrip() {
+        let mut state = ServerState::new(None);
+        let doc_uri = uri("file:///tmp/a.py");
+        state.upsert(doc_uri.clone(), "print(1)".to_string(), 7);
+
+        let doc = state.document(&doc_uri).expect("document stored");
+        assert_eq!(doc.text, "print(1)");
+        assert_eq!(doc.version, 7);
+
+        // upsert replaces (last write wins for FULL sync).
+        state.upsert(doc_uri.clone(), "print(2)".to_string(), 8);
+        assert_eq!(state.document(&doc_uri).expect("doc").text, "print(2)");
+        assert_eq!(state.document(&doc_uri).expect("doc").version, 8);
+    }
+
+    #[test]
+    fn set_version_bumps_version_without_changing_text() {
+        let mut state = ServerState::new(None);
+        let doc_uri = uri("file:///tmp/a.py");
+        state.upsert(doc_uri.clone(), "print(1)".to_string(), 3);
+
+        // An empty `didChange` advances the version but leaves text/issues alone.
+        state.set_version(&doc_uri, 4);
+        let doc = state.document(&doc_uri).expect("doc");
+        assert_eq!(doc.version, 4);
+        assert_eq!(doc.text, "print(1)");
+
+        // A no-op on an unknown document is harmless.
+        state.set_version(&uri("file:///tmp/missing.py"), 9);
+    }
+
+    #[test]
+    fn open_uris_and_remove() {
+        let mut state = ServerState::new(None);
+        let a = uri("file:///tmp/a.py");
+        let b = uri("file:///tmp/b.py");
+        state.upsert(a.clone(), String::new(), 1);
+        state.upsert(b.clone(), String::new(), 1);
+
+        let mut open = state.open_uris();
+        open.sort();
+        assert_eq!(open, vec![a.clone(), b.clone()]);
+
+        state.remove(&a);
+        assert!(state.document(&a).is_none());
+        assert_eq!(state.open_uris(), vec![b]);
+    }
+
+    #[test]
+    fn new_without_root_uses_default_config() {
+        let state = ServerState::new(None);
+        assert_eq!(state.config(), &Config::default());
+        assert!(state.root().is_none());
+    }
+
+    #[test]
+    fn new_loads_config_from_root_and_reloads() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        std::fs::write(dir.path().join("config.yml"), "rules:\n  OWT102: off\n")
+            .expect("seed config");
+
+        let mut state = ServerState::new(Some(dir.path().to_path_buf()));
+        assert!(state.config().rule_overrides.contains_key("OWT102"));
+
+        // Simulate a quick-fix appending another override, then reloading.
+        std::fs::write(
+            dir.path().join("config.yml"),
+            "rules:\n  OWT102: off\n  OWT101: off\n",
+        )
+        .expect("update config");
+        state.reload_config();
+        assert!(state.config().rule_overrides.contains_key("OWT101"));
+    }
+}

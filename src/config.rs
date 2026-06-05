@@ -46,6 +46,26 @@ pub fn load_config(config_path: Option<&Path>) -> Result<Config> {
     Ok(Config::default())
 }
 
+/// Load configuration by looking for a config file inside `dir` (a workspace
+/// root), independent of the process working directory. Used by the language
+/// server, whose workspace root is the editor's project folder. Falls back to
+/// `Config::default()` when no config file is present.
+pub fn load_config_in_dir(dir: &Path) -> Result<Config> {
+    for name in [
+        "config.yml",
+        "config.yaml",
+        "owui-lint.yml",
+        "owui-lint.yaml",
+    ] {
+        let candidate = dir.join(name);
+        if candidate.exists() {
+            return parse_yaml_config(&fs::read_to_string(&candidate)?)
+                .map_err(|err| anyhow!("Invalid config {}: {err}", candidate.display()));
+        }
+    }
+    Ok(Config::default())
+}
+
 fn find_default_config_path() -> Option<PathBuf> {
     let cwd = std::env::current_dir().ok()?;
     let config_yml = cwd.join("config.yml");
@@ -156,7 +176,7 @@ fn unquote(value: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{Config, load_config, parse_yaml_config};
+    use super::{Config, load_config, load_config_in_dir, parse_yaml_config};
     use std::fs;
 
     #[test]
@@ -196,20 +216,42 @@ rules:
 
     #[test]
     fn loads_from_explicit_path() {
-        let dir = std::env::temp_dir().join(format!(
-            "owui_lint_cfg_test_{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock should be valid")
-                .as_nanos()
-        ));
-        fs::create_dir_all(&dir).expect("temp directory should be created");
-        let path = dir.join("cfg.yml");
+        let dir = tempfile::tempdir().expect("temp directory should be created");
+        let path = dir.path().join("cfg.yml");
         fs::write(&path, "rules:\n  OWT101: off\n").expect("config file should be written");
 
         let cfg = load_config(Some(&path)).expect("config should load");
         assert!(cfg.rule_overrides.contains_key("OWT101"));
+    }
 
-        fs::remove_dir_all(dir).expect("temp directory should be removed");
+    #[test]
+    fn load_config_in_dir_finds_config_file() {
+        let dir = tempfile::tempdir().expect("temp directory should be created");
+        fs::write(dir.path().join("config.yml"), "rules:\n  OWT102: off\n")
+            .expect("config file should be written");
+
+        let cfg = load_config_in_dir(dir.path()).expect("config should load");
+        assert!(cfg.rule_overrides.contains_key("OWT102"));
+    }
+
+    #[test]
+    fn load_config_in_dir_defaults_without_file() {
+        let dir = tempfile::tempdir().expect("temp directory should be created");
+        let cfg = load_config_in_dir(dir.path()).expect("config should load");
+        assert_eq!(cfg, Config::default());
+    }
+
+    #[test]
+    fn load_config_in_dir_prefers_config_yml_over_owui_lint_yml() {
+        let dir = tempfile::tempdir().expect("temp directory should be created");
+        // config.yml comes first in the lookup order, so its overrides win.
+        fs::write(dir.path().join("config.yml"), "rules:\n  OWT100: off\n")
+            .expect("config.yml written");
+        fs::write(dir.path().join("owui-lint.yml"), "rules:\n  OWT200: off\n")
+            .expect("owui-lint.yml written");
+
+        let cfg = load_config_in_dir(dir.path()).expect("config should load");
+        assert!(cfg.rule_overrides.contains_key("OWT100"));
+        assert!(!cfg.rule_overrides.contains_key("OWT200"));
     }
 }

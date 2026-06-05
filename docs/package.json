@@ -1,0 +1,17 @@
+{
+  "name": "owui-lint-docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "check": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.39.3",
+    "astro": "6.4.4",
+    "typescript": "5.9.3"
+  }
+}

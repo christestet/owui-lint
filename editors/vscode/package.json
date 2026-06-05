@@ -1,0 +1,60 @@
+{
+  "name": "owui-lint",
+  "displayName": "owui-lint",
+  "description": "Live Open WebUI extension linting (Tools, Pipe, Filter, Action, Pipeline) powered by owui-lint.",
+  "version": "0.1.0",
+  "publisher": "owui-lint",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:python"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "owui-lint.restartServer",
+        "title": "owui-lint: Restart Language Server"
+      }
+    ],
+    "configuration": {
+      "title": "owui-lint",
+      "properties": {
+        "owui-lint.path": {
+          "type": "string",
+          "default": "owui-lint",
+          "markdownDescription": "Path to the `owui-lint` executable. Defaults to `owui-lint` on your PATH."
+        },
+        "owui-lint.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace the communication between VS Code and the owui-lint language server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}

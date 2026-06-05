@@ -95,6 +95,8 @@ enum Commands {
         #[arg(short = 'o', long, value_name = "PATH")]
         output: Option<PathBuf>,
     },
+    /// Run the language server (LSP over stdio) for editor integration.
+    Server,
 }
 
 #[derive(Debug, Parser)]
@@ -156,6 +158,13 @@ where
             };
             write_or_print(&rendered, output)
         }
+        Some(Commands::Server) => match crate::server::run() {
+            Ok(()) => 0,
+            Err(err) => {
+                eprintln!("owui-lint server error: {err}");
+                1
+            }
+        },
         None => run_lint(cli.lint),
     }
 }

@@ -11,6 +11,8 @@ const COMMANDS_BEGIN: &str = "<!-- BEGIN:OWUI_LINT_COMMANDS -->";
 const COMMANDS_END: &str = "<!-- END:OWUI_LINT_COMMANDS -->";
 const RULES_BEGIN: &str = "<!-- BEGIN:OWUI_LINT_RULES -->";
 const RULES_END: &str = "<!-- END:OWUI_LINT_RULES -->";
+const SITE_CLI_PATH: &str = "docs/src/content/docs/reference/cli.md";
+const SITE_RULES_PATH: &str = "docs/src/content/docs/reference/rules.md";
 
 const SECTION_BREAKS: &[&str] = &["Arguments:", "Options:", "Commands:", "Examples:"];
 
@@ -40,6 +42,12 @@ struct RuleJson {
     summary: String,
 }
 
+#[derive(Debug)]
+struct GeneratedFile {
+    path: PathBuf,
+    content: String,
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().skip(1).collect();
     let mut check = false;
@@ -51,8 +59,8 @@ fn main() -> Result<()> {
             "--write" => write = true,
             "-h" | "--help" => {
                 println!("Usage: cargo run --bin docs-sync -- [--check|--write]");
-                println!("  --check  Fail if README.md is out of date");
-                println!("  --write  Rewrite README.md generated sections (default)");
+                println!("  --check  Fail if generated docs are missing or out of date");
+                println!("  --write  Rewrite generated docs artifacts (default)");
                 return Ok(());
             }
             other => bail!("Unknown argument: {other}"),
@@ -64,14 +72,37 @@ fn main() -> Result<()> {
     let original = fs::read_to_string(&readme_path)
         .with_context(|| format!("failed to read {}", readme_path.display()))?;
     let generated = build_readme_content(&original)?;
+    let site_pages = build_site_pages(&root)?;
 
     let check_mode = check && !write;
     if check_mode {
+        let mut stale = Vec::new();
         if generated != original {
-            eprintln!("README.md is out of date. Run: make docs-sync");
+            stale.push("README.md".to_string());
+        }
+        for page in &site_pages {
+            match fs::read_to_string(&page.path) {
+                Ok(existing) if normalize_final_newline(&existing) == page.content => {}
+                Ok(_) => stale.push(display_repo_path(&root, &page.path)),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                    stale.push(display_repo_path(&root, &page.path));
+                }
+                Err(err) => {
+                    return Err(err)
+                        .with_context(|| format!("failed to read {}", page.path.display()));
+                }
+            }
+        }
+
+        if !stale.is_empty() {
+            eprintln!("Generated docs are out of date:");
+            for path in stale {
+                eprintln!("  - {path}");
+            }
+            eprintln!("Run: make docs-sync");
             std::process::exit(1);
         }
-        println!("README.md is up to date.");
+        println!("Generated docs are up to date.");
         return Ok(());
     }
 
@@ -88,6 +119,24 @@ fn main() -> Result<()> {
         println!("README.md already up to date");
     }
 
+    for page in site_pages {
+        if let Some(parent) = page.path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create {}", parent.display()))?;
+        }
+        let existing = fs::read_to_string(&page.path).ok();
+        if existing.as_deref().map(normalize_final_newline) == Some(page.content.clone()) {
+            println!(
+                "{} already up to date",
+                display_repo_path(&root, &page.path)
+            );
+            continue;
+        }
+        fs::write(&page.path, &page.content)
+            .with_context(|| format!("failed to write {}", page.path.display()))?;
+        println!("Updated {}", display_repo_path(&root, &page.path));
+    }
+
     Ok(())
 }
 
@@ -96,6 +145,110 @@ fn build_readme_content(original: &str) -> Result<String> {
     let rules = render_rules_block()?;
     let updated = replace_marker_block(original, COMMANDS_BEGIN, COMMANDS_END, &commands)?;
     replace_marker_block(&updated, RULES_BEGIN, RULES_END, &rules)
+}
+
+fn build_site_pages(root: &Path) -> Result<Vec<GeneratedFile>> {
+    Ok(vec![
+        GeneratedFile {
+            path: root.join(SITE_CLI_PATH),
+            content: with_final_newline(&render_site_cli_page()?),
+        },
+        GeneratedFile {
+            path: root.join(SITE_RULES_PATH),
+            content: with_final_newline(&render_site_rules_page()?),
+        },
+    ])
+}
+
+fn render_site_cli_page() -> Result<String> {
+    let top_help = run_owui_lint(&["--help"])?;
+    let subcommands = parse_commands(&top_help);
+    let mut command_docs = vec![CommandDoc {
+        name: "owui-lint".to_string(),
+        description: "Top-level command".to_string(),
+        usage: parse_usage(&top_help),
+    }];
+
+    for cmd in subcommands {
+        let sub_help = run_owui_lint(&[&cmd.name, "--help"])?;
+        command_docs.push(CommandDoc {
+            name: format!("owui-lint {}", cmd.name),
+            description: cmd.description,
+            usage: parse_usage(&sub_help),
+        });
+    }
+
+    let global_options: Vec<OptionDoc> = parse_options(&top_help)
+        .into_iter()
+        .map(normalize_option)
+        .collect();
+
+    let mut lines = vec![
+        "---".to_string(),
+        "title: CLI Reference".to_string(),
+        "description: Generated command and option reference for owui-lint.".to_string(),
+        "---".to_string(),
+        String::new(),
+        "_This page is generated by `src/bin/docs-sync.rs`. Do not edit manually._".to_string(),
+        String::new(),
+        "## Commands".to_string(),
+        String::new(),
+        "| Command | Description | Usage |".to_string(),
+        "|------|-------------|-------|".to_string(),
+    ];
+
+    for cmd in &command_docs {
+        lines.push(format!(
+            "| `{}` | {} | `{}` |",
+            escape_cell(&cmd.name),
+            escape_cell(&cmd.description),
+            escape_cell(&cmd.usage)
+        ));
+    }
+
+    lines.extend([
+        String::new(),
+        "## Global Options".to_string(),
+        String::new(),
+        "| Option | Description |".to_string(),
+        "|--------|-------------|".to_string(),
+    ]);
+
+    for opt in &global_options {
+        lines.push(format!(
+            "| `{}` | {} |",
+            escape_cell(&opt.option),
+            escape_cell(&opt.description)
+        ));
+    }
+
+    lines.extend([
+        String::new(),
+        "## Examples".to_string(),
+        String::new(),
+        "```bash".to_string(),
+        "owui-lint path/to/extensions".to_string(),
+        "owui-lint path/to/extensions --format sarif --output owui-lint.sarif".to_string(),
+        "owui-lint rules".to_string(),
+        "owui-lint explain OWT101".to_string(),
+        "owui-lint server".to_string(),
+        "```".to_string(),
+    ]);
+
+    Ok(lines.join("\n"))
+}
+
+fn render_site_rules_page() -> Result<String> {
+    let generated = render_rules_block()?.replace("### ", "## ");
+    Ok([
+        "---",
+        "title: Rules Reference",
+        "description: Generated lint rule catalog with default severities.",
+        "---",
+        "",
+        &generated,
+    ]
+    .join("\n"))
 }
 
 fn render_commands_block() -> Result<String> {
@@ -481,6 +634,25 @@ fn replace_marker_block(content: &str, begin: &str, end: &str, generated: &str) 
 
 fn escape_cell(text: &str) -> String {
     text.replace('|', "\\|")
+}
+
+fn with_final_newline(content: &str) -> String {
+    if content.ends_with('\n') {
+        content.to_string()
+    } else {
+        format!("{content}\n")
+    }
+}
+
+fn normalize_final_newline(content: &str) -> String {
+    with_final_newline(content)
+}
+
+fn display_repo_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .display()
+        .to_string()
 }
 
 #[allow(dead_code)]

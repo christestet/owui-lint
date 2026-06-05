@@ -122,7 +122,14 @@ pub fn analyze_file(path: &Path) -> ModuleInfo {
         }
     };
 
-    let syntax_error = detect_syntax_error(&source);
+    analyze_source(path, &source)
+}
+
+/// Analyze Python source held in memory (for example an unsaved editor buffer),
+/// without touching the filesystem. `analyze_file` is a thin wrapper that reads
+/// the file and delegates here, so both paths share identical behavior.
+pub fn analyze_source(path: &Path, source: &str) -> ModuleInfo {
+    let syntax_error = detect_syntax_error(source);
     if let Some(error) = syntax_error {
         return ModuleInfo {
             path: path.to_path_buf(),
@@ -136,7 +143,7 @@ pub fn analyze_file(path: &Path) -> ModuleInfo {
         };
     }
 
-    parse_module(path, &source)
+    parse_module(path, source)
 }
 
 fn parse_module(path: &Path, source: &str) -> ModuleInfo {
