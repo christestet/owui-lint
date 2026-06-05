@@ -9,9 +9,11 @@ description: Use owui-lint as an LSP server.
 owui-lint server
 ```
 
-The server provides Open WebUI-specific intelligence on top of a general Python language server (Pylance/Pyright); it does not replace general Python tooling.
+The server provides Open WebUI-specific intelligence on top of a general Python language server (Pylance/Pyright); it does not replace general Python tooling. It identifies itself to the client via `serverInfo` (`owui-lint` plus the binary version).
 
-- **Diagnostics** — the same rule engine used by the CLI; published on open/change, cleared on close.
+- **Diagnostics** — the same rule engine used by the CLI, offered both ways:
+  - *Push* — published on open/change and cleared on close (`textDocument/publishDiagnostics`).
+  - *Pull* — computed on demand via the LSP 3.17 pull model (`textDocument/diagnostic`); clients that prefer pull use this and ignore the push. After a project-wide change such as disabling a rule, the server asks pull-model clients to re-query (`workspace/diagnostic/refresh`).
 - **Hover** — on a finding line: rule title, summary, **Fix:** remediation, a `[Documentation](url)` link, and the minimum Open WebUI version required.
 - **Completions** — Open WebUI scaffolding snippets for Python files, selected by cursor context:
   - *Inside the module docstring* — header field snippets: `version`, `title`, `requirements`, `author`, `description`.

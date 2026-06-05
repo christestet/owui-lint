@@ -23,20 +23,24 @@ use lsp_types::notification::{
     PublishDiagnostics, ShowMessage,
 };
 use lsp_types::request::{
-    CodeActionRequest, Completion, ExecuteCommand, HoverRequest, Request as _,
+    CodeActionRequest, Completion, DocumentDiagnosticRequest, ExecuteCommand, HoverRequest,
+    Request as _, WorkspaceDiagnosticRefresh,
 };
 use lsp_types::{
-    CodeActionProviderCapability, CompletionOptions, DidChangeTextDocumentParams,
-    DidCloseTextDocumentParams, DidOpenTextDocumentParams, ExecuteCommandOptions,
-    ExecuteCommandParams, HoverProviderCapability, InitializeParams, MessageType,
-    PublishDiagnosticsParams, ServerCapabilities, ShowMessageParams, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Uri,
+    CodeActionProviderCapability, CompletionOptions, DiagnosticOptions,
+    DiagnosticServerCapabilities, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, DocumentDiagnosticParams, DocumentDiagnosticReport,
+    DocumentDiagnosticReportResult, ExecuteCommandOptions, ExecuteCommandParams,
+    FullDocumentDiagnosticReport, HoverProviderCapability, InitializeParams, InitializeResult,
+    MessageType, PublishDiagnosticsParams, RelatedFullDocumentDiagnosticReport, ServerCapabilities,
+    ServerInfo, ShowMessageParams, TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
+    WorkDoneProgressOptions,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::server::code_actions::{DISABLE_RULE_COMMAND, disable_rule_in_config};
-use crate::server::diagnostics::issues_to_diagnostics;
+use crate::server::diagnostics::{DIAGNOSTIC_SOURCE, issues_to_diagnostics};
 use crate::server::state::{ServerState, uri_to_file_path};
 
 /// Run the language server over stdio until the client shuts it down.
@@ -54,16 +58,41 @@ pub fn run() -> Result<()> {
 /// Decoupled from `Connection::stdio()` so tests can drive the server through an
 /// in-memory connection (`Connection::memory()`).
 pub fn serve(connection: &Connection) -> Result<()> {
-    let capabilities = serde_json::to_value(server_capabilities())
-        .context("failed to serialize server capabilities")?;
-    let init_params = connection
-        .initialize(capabilities)
+    // Drive the handshake by hand (rather than `Connection::initialize`) so the
+    // `InitializeResult` can carry `serverInfo` and so we can read the client's
+    // capabilities to decide which optional features to use.
+    let (id, params) = connection
+        .initialize_start()
         .context("LSP initialize handshake failed")?;
     let init_params: InitializeParams =
-        serde_json::from_value(init_params).context("invalid InitializeParams")?;
+        serde_json::from_value(params).context("invalid InitializeParams")?;
+
+    let result = InitializeResult {
+        capabilities: server_capabilities(),
+        server_info: Some(ServerInfo {
+            name: env!("CARGO_PKG_NAME").to_string(),
+            version: Some(env!("CARGO_PKG_VERSION").to_string()),
+        }),
+    };
+    connection
+        .initialize_finish(id, serde_json::to_value(result)?)
+        .context("LSP initialize handshake failed")?;
 
     let mut state = ServerState::new(workspace_root(&init_params));
+    state.set_diagnostic_refresh_support(client_supports_diagnostic_refresh(&init_params));
     main_loop(connection, &mut state)
+}
+
+/// Whether the client advertised `workspace.diagnostic.refreshSupport`, meaning
+/// it can handle a server-sent `workspace/diagnostic/refresh` request.
+fn client_supports_diagnostic_refresh(params: &InitializeParams) -> bool {
+    params
+        .capabilities
+        .workspace
+        .as_ref()
+        .and_then(|workspace| workspace.diagnostic.as_ref())
+        .and_then(|diagnostic| diagnostic.refresh_support)
+        .unwrap_or(false)
 }
 
 fn server_capabilities() -> ServerCapabilities {
@@ -79,6 +108,16 @@ fn server_capabilities() -> ServerCapabilities {
             commands: vec![DISABLE_RULE_COMMAND.to_string()],
             ..ExecuteCommandOptions::default()
         }),
+        // Pull-model diagnostics (LSP 3.17). Each file is linted in isolation, so
+        // there are no inter-file dependencies and we don't offer workspace-wide
+        // pull. Push diagnostics (publishDiagnostics) remain for clients that use
+        // them; clients that support pull will prefer it and ignore the push.
+        diagnostic_provider: Some(DiagnosticServerCapabilities::Options(DiagnosticOptions {
+            identifier: Some(DIAGNOSTIC_SOURCE.to_string()),
+            inter_file_dependencies: false,
+            workspace_diagnostics: false,
+            work_done_progress_options: WorkDoneProgressOptions::default(),
+        })),
         ..ServerCapabilities::default()
     }
 }
@@ -148,6 +187,15 @@ fn dispatch_request(
                 return Ok(());
             };
             let result = completions::handle_completion(state, &params);
+            respond(connection, id, &result)?;
+        }
+        DocumentDiagnosticRequest::METHOD => {
+            let Some(params) =
+                parse_params::<DocumentDiagnosticParams>(connection, &id, request.params)?
+            else {
+                return Ok(());
+            };
+            let result = document_diagnostic_report(state, &params.text_document.uri);
             respond(connection, id, &result)?;
         }
         ExecuteCommand::METHOD => {
@@ -233,10 +281,49 @@ fn handle_execute_command(
     }
     state.reload_config();
 
-    // Refresh diagnostics for every open document under the new config.
+    // Refresh diagnostics for every open document under the new config (push
+    // model). Pull-model clients get a single refresh request instead.
     for uri in state.open_uris() {
         publish_diagnostics(connection, state, &uri)?;
     }
+    if state.diagnostic_refresh_support() {
+        request_diagnostic_refresh(connection, state)?;
+    }
+    Ok(())
+}
+
+/// Build a full diagnostic report for a pull (`textDocument/diagnostic`) request.
+/// This is the pull-shaped view of the same cached issues that `publish_diagnostics`
+/// pushes. Unknown (never-opened) documents report an empty set.
+fn document_diagnostic_report(state: &ServerState, uri: &Uri) -> DocumentDiagnosticReportResult {
+    let items = state
+        .document(uri)
+        .map(|document| issues_to_diagnostics(&document.issues, &document.text))
+        .unwrap_or_default();
+    DocumentDiagnosticReportResult::Report(DocumentDiagnosticReport::Full(
+        RelatedFullDocumentDiagnosticReport {
+            related_documents: None,
+            full_document_diagnostic_report: FullDocumentDiagnosticReport {
+                result_id: None,
+                items,
+            },
+        },
+    ))
+}
+
+/// Ask the client to re-pull all diagnostics. Sent after a project-wide change
+/// (e.g. disabling a rule) so pull-model clients see the new results. The client
+/// replies to this request; the main loop ignores that response.
+fn request_diagnostic_refresh(connection: &Connection, state: &mut ServerState) -> Result<()> {
+    let request = lsp_server::Request {
+        id: RequestId::from(state.next_request_id()),
+        method: WorkspaceDiagnosticRefresh::METHOD.to_string(),
+        params: serde_json::Value::Null,
+    };
+    connection
+        .sender
+        .send(Message::Request(request))
+        .context("failed to send diagnostic refresh request")?;
     Ok(())
 }
 

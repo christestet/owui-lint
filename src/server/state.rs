@@ -25,6 +25,13 @@ pub struct ServerState {
     documents: HashMap<Uri, Document>,
     root: Option<PathBuf>,
     config: Config,
+    /// Whether the client advertised `workspace.diagnostic.refreshSupport`, i.e.
+    /// it can handle a server-sent `workspace/diagnostic/refresh` request. Set
+    /// from the client capabilities during the initialize handshake.
+    diagnostic_refresh_support: bool,
+    /// Monotonic id source for requests the server sends to the client (e.g. the
+    /// diagnostic refresh request). JSON-RPC ids must be unique per connection.
+    next_request_id: i32,
 }
 
 impl ServerState {
@@ -38,7 +45,26 @@ impl ServerState {
             documents: HashMap::new(),
             root,
             config,
+            diagnostic_refresh_support: false,
+            next_request_id: 1,
         }
+    }
+
+    /// Record whether the client supports `workspace/diagnostic/refresh`.
+    pub fn set_diagnostic_refresh_support(&mut self, supported: bool) {
+        self.diagnostic_refresh_support = supported;
+    }
+
+    /// Whether the client can handle a server-sent diagnostic refresh request.
+    pub fn diagnostic_refresh_support(&self) -> bool {
+        self.diagnostic_refresh_support
+    }
+
+    /// Allocate the next unique id for a server-initiated request.
+    pub fn next_request_id(&mut self) -> i32 {
+        let id = self.next_request_id;
+        self.next_request_id += 1;
+        id
     }
 
     /// Read accessor for the active config. Linting now happens inside the state
