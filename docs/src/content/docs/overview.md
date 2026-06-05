@@ -15,9 +15,8 @@ It focuses on Open WebUI-specific structure and runtime compatibility:
 
 The Python analysis is intentionally lightweight. `OWUI001` catches basic delimiter and string issues, but `owui-lint` is not a full Python parser. Use `python -m py_compile <file.py>` alongside it when you need full Python syntax validation.
 
-## Where It Runs
+## Configuration
 
-- locally as `owui-lint <target>`
-- in CI with text, JSON, GitHub annotation, or SARIF output
-- in editors through the `owui-lint server` language server
-- in Docker with the Makefile workflow
+Config is loaded automatically from `config.yml`, `config.yaml`, `owui-lint.yml`, or `owui-lint.yaml` in the working directory. You can also pass `-c <path>` explicitly. Rules can be turned off or promoted to errors in the `rules:` section; file discovery is controlled by `lint.include` and `lint.exclude` glob patterns.
+
+Default include pattern: `**/*.py`. Default excludes: `.git/**`, `.venv/**`, `**/__pycache__/**`.
