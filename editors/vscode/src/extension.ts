@@ -14,6 +14,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("owui-lint.restartServer", async () => {
       await restart(context);
     }),
+    // Reveal the server's output channel, where window/logMessage entries
+    // (startup, lint summaries, errors) and LSP message traces appear.
+    vscode.commands.registerCommand("owui-lint.showOutput", () => {
+      client?.outputChannel.show();
+    }),
   );
   client.start();
 }

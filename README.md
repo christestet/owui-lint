@@ -290,6 +290,8 @@ The repository also ships a VS Code extension as a `.vsix` release asset. Instal
 
 The extension adds Open WebUI-specific diagnostics, hover details, completions, and quick fixes. It complements Pylance/Pyright; it does not replace general Python syntax checking or IntelliSense.
 
+Diagnostics are available both as push (`textDocument/publishDiagnostics`) and the LSP 3.17 pull model (`textDocument/diagnostic`), so modern clients can fetch findings on demand; the server re-triggers pull clients after project-wide changes (`workspace/diagnostic/refresh`).
+
 If the binary is not on your `PATH`, configure:
 
 ```jsonc

@@ -9,11 +9,13 @@ use std::time::Duration;
 
 use lsp_server::{Connection, Message, Notification, Request, RequestId};
 use lsp_types::{
-    CodeAction, CodeActionContext, CodeActionOrCommand, CodeActionParams, CodeActionResponse,
-    Diagnostic, DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    ExecuteCommandParams, InitializeParams, NumberOrString, PublishDiagnosticsParams,
-    TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem, Uri,
-    VersionedTextDocumentIdentifier,
+    ClientCapabilities, CodeAction, CodeActionContext, CodeActionOrCommand, CodeActionParams,
+    CodeActionResponse, Diagnostic, DiagnosticWorkspaceClientCapabilities,
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    DocumentDiagnosticParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
+    ExecuteCommandParams, InitializeParams, InitializeResult, LogMessageParams, NumberOrString,
+    PublishDiagnosticsParams, TextDocumentContentChangeEvent, TextDocumentIdentifier,
+    TextDocumentItem, Uri, VersionedTextDocumentIdentifier, WorkspaceClientCapabilities,
 };
 
 const TOOLS_SOURCE: &str = "class Tools:\n    def search(self, query):\n        return query\n";
@@ -274,6 +276,143 @@ fn did_close_clears_diagnostics() {
     shutdown(&client, server, 3);
 }
 
+/// The initialize response must advertise `serverInfo` (so editors attribute the
+/// server) and the pull-model diagnostic provider (LSP 3.17).
+#[test]
+fn initialize_reports_server_info_and_diagnostic_provider() {
+    let (client, server) = spawn_server();
+
+    let init_id = RequestId::from(1);
+    send_request(
+        &client,
+        init_id.clone(),
+        "initialize",
+        InitializeParams::default(),
+    );
+    let result: InitializeResult =
+        serde_json::from_value(recv_response(&client, &init_id)).expect("initialize result");
+    send_notification(&client, "initialized", serde_json::json!({}));
+
+    let info = result.server_info.expect("serverInfo present");
+    assert_eq!(info.name, "owui-lint", "server name");
+    assert!(info.version.is_some(), "server version present");
+    assert!(
+        result.capabilities.diagnostic_provider.is_some(),
+        "pull-model diagnostics advertised"
+    );
+
+    shutdown(&client, server, 2);
+}
+
+/// A `textDocument/diagnostic` (pull) request returns a full report carrying the
+/// same findings the server pushes via `publishDiagnostics`.
+#[test]
+fn responds_to_pull_diagnostic_request() {
+    let (client, server) = spawn_server();
+    handshake(&client, None);
+
+    let uri = Uri::from_str("file:///tmp/owui_pull.py").expect("uri");
+    open_document(&client, &uri, TOOLS_SOURCE);
+    // Drain the diagnostics pushed on open; the pull request is what we assert on.
+    let _ = recv_publish(&client);
+
+    let diag_id = RequestId::from(20);
+    send_request(
+        &client,
+        diag_id.clone(),
+        "textDocument/diagnostic",
+        DocumentDiagnosticParams {
+            text_document: TextDocumentIdentifier { uri: uri.clone() },
+            identifier: None,
+            previous_result_id: None,
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        },
+    );
+
+    let report: DocumentDiagnosticReportResult =
+        serde_json::from_value(recv_response(&client, &diag_id)).expect("diagnostic report");
+    let items = match report {
+        DocumentDiagnosticReportResult::Report(DocumentDiagnosticReport::Full(full)) => {
+            full.full_document_diagnostic_report.items
+        }
+        other => panic!("expected a full report, got {other:?}"),
+    };
+    let codes = codes(&items);
+    assert!(codes.contains(&"OWT101".to_string()), "got {codes:?}");
+    assert!(codes.contains(&"OWT102".to_string()), "got {codes:?}");
+
+    shutdown(&client, server, 21);
+}
+
+/// When the client advertises `workspace.diagnostic.refreshSupport`, disabling a
+/// rule must trigger a server-sent `workspace/diagnostic/refresh` request so
+/// pull-model clients re-query. When it does not, no such request is sent.
+#[test]
+fn execute_command_requests_diagnostic_refresh_only_when_supported() {
+    for refresh_support in [true, false] {
+        let workspace = tempfile::tempdir().expect("temp workspace");
+        let (client, server) = spawn_server();
+        handshake_with_refresh(&client, workspace.path(), refresh_support);
+
+        let uri = Uri::from_str("file:///tmp/owui_refresh.py").expect("uri");
+        open_document(&client, &uri, TOOLS_SOURCE);
+        let _ = recv_publish(&client);
+
+        let command_id = RequestId::from(10);
+        send_request(
+            &client,
+            command_id.clone(),
+            "workspace/executeCommand",
+            ExecuteCommandParams {
+                command: "owui-lint.disableRule".to_string(),
+                arguments: vec![serde_json::Value::String("OWT102".to_string())],
+                work_done_progress_params: Default::default(),
+            },
+        );
+
+        // Collect every server->client request seen before the command response.
+        let requests = requests_until_response(&client, &command_id);
+        let sent_refresh = requests
+            .iter()
+            .any(|request| request.method == "workspace/diagnostic/refresh");
+        assert_eq!(
+            sent_refresh, refresh_support,
+            "refresh request presence should match client capability (support={refresh_support})"
+        );
+
+        shutdown(&client, server, 11);
+    }
+}
+
+/// The server reports operational events (startup, lint summaries, errors) via
+/// `window/logMessage`, which editors surface in their output channel.
+#[test]
+fn server_logs_startup_to_output_channel() {
+    let (client, server) = spawn_server();
+    handshake(&client, None);
+
+    let log = recv_log_message(&client);
+    assert!(
+        log.message.contains("owui-lint") && log.message.contains("started"),
+        "expected a startup log message, got {:?}",
+        log.message
+    );
+
+    shutdown(&client, server, 2);
+}
+
+/// Wait for the next `window/logMessage` notification and return its params.
+fn recv_log_message(client: &Connection) -> LogMessageParams {
+    loop {
+        if let Message::Notification(notification) = recv(client)
+            && notification.method == "window/logMessage"
+        {
+            return serde_json::from_value(notification.params).expect("logMessage params");
+        }
+    }
+}
+
 fn diagnostic_code(diagnostic: &Diagnostic) -> Option<String> {
     match &diagnostic.code {
         Some(NumberOrString::String(code)) => Some(code.clone()),
@@ -319,6 +458,48 @@ fn handshake(client: &Connection, root: Option<&Path>) {
     send_request(client, init_id.clone(), "initialize", params);
     recv_response(client, &init_id);
     send_notification(client, "initialized", serde_json::json!({}));
+}
+
+/// Handshake advertising (or not) `workspace.diagnostic.refreshSupport`.
+fn handshake_with_refresh(client: &Connection, root: &Path, refresh_support: bool) {
+    let init_id = RequestId::from(1);
+    #[allow(deprecated)]
+    let params = InitializeParams {
+        root_uri: Some(file_uri(root)),
+        capabilities: ClientCapabilities {
+            workspace: Some(WorkspaceClientCapabilities {
+                diagnostic: Some(DiagnosticWorkspaceClientCapabilities {
+                    refresh_support: Some(refresh_support),
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    send_request(client, init_id.clone(), "initialize", params);
+    recv_response(client, &init_id);
+    send_notification(client, "initialized", serde_json::json!({}));
+}
+
+/// Drain messages until the response to `expected` arrives, returning every
+/// server->client request seen along the way (e.g. a diagnostic refresh).
+fn requests_until_response(client: &Connection, expected: &RequestId) -> Vec<Request> {
+    let mut requests = Vec::new();
+    loop {
+        match recv(client) {
+            Message::Response(response) => {
+                assert_eq!(
+                    &response.id, expected,
+                    "unexpected response id (awaited {expected:?}): {response:?}"
+                );
+                assert!(response.error.is_none(), "unexpected error: {response:?}");
+                return requests;
+            }
+            Message::Request(request) => requests.push(request),
+            Message::Notification(_) => {}
+        }
+    }
 }
 
 /// Open a document and let the server lint it.
