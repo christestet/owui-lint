@@ -46,10 +46,12 @@ fn render_issue(issue: &Issue) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
     use crate::server::state::ServerState;
     use lsp_types::{
-        Position, TextDocumentIdentifier, TextDocumentPositionParams, Url, WorkDoneProgressParams,
+        Position, TextDocumentIdentifier, TextDocumentPositionParams, Uri, WorkDoneProgressParams,
     };
 
     // `def search` (line 2, 1-indexed) triggers OWT101/OWT102; `return query`
@@ -57,7 +59,7 @@ mod tests {
     const TOOLS_SOURCE: &str = "class Tools:\n    def search(self, query):\n        return query\n";
 
     fn hover_at(source: &str, line: u32) -> Option<Hover> {
-        let uri = Url::parse("file:///tmp/owui_hover_test.py").expect("valid uri");
+        let uri = Uri::from_str("file:///tmp/owui_hover_test.py").expect("valid uri");
         let mut state = ServerState::new(None);
         state.upsert(uri.clone(), source.to_string(), 1);
 
@@ -94,7 +96,7 @@ mod tests {
 
     #[test]
     fn hover_none_for_unknown_document() {
-        let uri = Url::parse("file:///tmp/owui_hover_missing.py").expect("valid uri");
+        let uri = Uri::from_str("file:///tmp/owui_hover_missing.py").expect("valid uri");
         let state = ServerState::new(None);
         let params = HoverParams {
             text_document_position_params: TextDocumentPositionParams {

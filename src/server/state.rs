@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use lsp_types::Url;
+use lsp_types::Uri;
 
 use crate::config::{Config, load_config_in_dir};
 use crate::linter::lint_source;
@@ -22,7 +22,7 @@ pub struct Document {
 /// Mutable server state: open documents plus the workspace configuration.
 #[derive(Debug)]
 pub struct ServerState {
-    documents: HashMap<Url, Document>,
+    documents: HashMap<Uri, Document>,
     root: Option<PathBuf>,
     config: Config,
 }
@@ -52,16 +52,16 @@ impl ServerState {
         self.root.as_deref()
     }
 
-    pub fn document(&self, uri: &Url) -> Option<&Document> {
+    pub fn document(&self, uri: &Uri) -> Option<&Document> {
         self.documents.get(uri)
     }
 
     /// All currently open document URIs (used to refresh diagnostics).
-    pub fn open_uris(&self) -> Vec<Url> {
+    pub fn open_uris(&self) -> Vec<Uri> {
         self.documents.keys().cloned().collect()
     }
 
-    pub fn upsert(&mut self, uri: Url, text: String, version: i32) {
+    pub fn upsert(&mut self, uri: Uri, text: String, version: i32) {
         let issues = lint_source(&uri_to_path(&uri), &text, &self.config);
         self.documents.insert(
             uri,
@@ -76,13 +76,13 @@ impl ServerState {
     /// Record a new document version without changing its text or re-linting.
     /// Used for `didChange` notifications that carry no content (FULL sync still
     /// advances the version even when the text is unchanged).
-    pub fn set_version(&mut self, uri: &Url, version: i32) {
+    pub fn set_version(&mut self, uri: &Uri, version: i32) {
         if let Some(document) = self.documents.get_mut(uri) {
             document.version = version;
         }
     }
 
-    pub fn remove(&mut self, uri: &Url) {
+    pub fn remove(&mut self, uri: &Uri) {
         self.documents.remove(uri);
     }
 
@@ -102,20 +102,34 @@ impl ServerState {
     }
 }
 
+/// Convert a `file://` URI to a real filesystem path, or `None` for non-file
+/// URIs. `lsp_types::Uri` (fluent-uri) has no path conversion, so we go through
+/// the `url` crate which handles percent-decoding and platform-specific paths.
+pub fn uri_to_file_path(uri: &Uri) -> Option<PathBuf> {
+    url::Url::parse(uri.as_str())
+        .ok()
+        .and_then(|url| url.to_file_path().ok())
+}
+
 /// Convert a `file://` URI to a filesystem path. Diagnostics need a path so the
 /// analyzer can resolve the extension type; for non-file URIs we fall back to a
 /// best-effort path derived from the URI itself.
-pub fn uri_to_path(uri: &Url) -> PathBuf {
-    uri.to_file_path()
-        .unwrap_or_else(|_| PathBuf::from(uri.path()))
+pub fn uri_to_path(uri: &Uri) -> PathBuf {
+    uri_to_file_path(uri).unwrap_or_else(|| {
+        url::Url::parse(uri.as_str())
+            .map(|url| PathBuf::from(url.path()))
+            .unwrap_or_else(|_| PathBuf::from(uri.as_str()))
+    })
 }
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
 
-    fn uri(s: &str) -> Url {
-        Url::parse(s).expect("valid uri")
+    fn uri(s: &str) -> Uri {
+        Uri::from_str(s).expect("valid uri")
     }
 
     #[test]

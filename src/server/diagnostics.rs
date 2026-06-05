@@ -1,5 +1,7 @@
+use std::str::FromStr;
+
 use lsp_types::{
-    CodeDescription, Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range, Url,
+    CodeDescription, Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range, Uri,
 };
 
 use crate::models::{Issue, Severity};
@@ -39,7 +41,7 @@ fn issue_to_diagnostic(issue: &Issue, lines: &[&str]) -> Diagnostic {
     };
 
     let code_description = rule_doc(issue.rule_id)
-        .and_then(|doc| Url::parse(doc.help_url).ok())
+        .and_then(|doc| Uri::from_str(doc.help_url).ok())
         .map(|href| CodeDescription { href });
 
     Diagnostic {
