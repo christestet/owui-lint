@@ -1,4 +1,7 @@
-# owui-lint
+<h1>
+  <img src="docs/src/assets/owui-lint-icon.svg" alt="" width="24" height="24">
+  owui-lint
+</h1>
 
 ![CI](https://github.com/christestet/owui-lint/actions/workflows/ci.yml/badge.svg)
 ![Release](https://img.shields.io/github/v/release/christestet/owui-lint?label=release)

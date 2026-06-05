@@ -8,6 +8,11 @@ export default defineConfig({
     starlight({
       title: 'owui-lint',
       description: 'A CLI linter for Open WebUI extensions.',
+      favicon: 'owui-lint-icon.svg',
+      logo: {
+        src: './src/assets/owui-lint-icon.svg',
+        alt: 'owui-lint',
+      },
       social: [
         {
           icon: 'github',
