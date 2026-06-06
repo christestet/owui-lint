@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.1](https://github.com/christestet/owui-lint/compare/v0.8.0...v0.8.1) (2026-06-06)
+
+
+### Bug Fixes
+
+* **deps-dev:** bump @types/node in /editors/vscode ([#56](https://github.com/christestet/owui-lint/issues/56)) ([242b305](https://github.com/christestet/owui-lint/commit/242b305142788e968b91f07bc1357f393d65cf49))
+* **deps-dev:** bump typescript from 5.9.3 to 6.0.3 in /editors/vscode ([#54](https://github.com/christestet/owui-lint/issues/54)) ([0dde76d](https://github.com/christestet/owui-lint/commit/0dde76d459244be367dfb57f19695ca3802af418))
+* **deps:** bump typescript from 5.9.3 to 6.0.3 in /docs ([#55](https://github.com/christestet/owui-lint/issues/55)) ([1f6988e](https://github.com/christestet/owui-lint/commit/1f6988e938f005208e48936d61854e12e2cda975))
+* **deps:** bump vscode-languageclient in /editors/vscode ([#57](https://github.com/christestet/owui-lint/issues/57)) ([5a68e02](https://github.com/christestet/owui-lint/commit/5a68e02ae09ac4455940bd481fbb9e72f76dac35))
+
 ## [0.8.0](https://github.com/christestet/owui-lint/compare/v0.7.1...v0.8.0) (2026-06-05)
 
 
