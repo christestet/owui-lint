@@ -1,9 +1,11 @@
 .vscode/**
 src/**
+out/**
 node_modules/**
 tsconfig.json
+esbuild.js
+package-lock.json
 .gitignore
 **/*.map
 **/*.ts
 owui-lint-icon.svg
-!out/**/*.js

@@ -145,7 +145,7 @@ jobs:
           # Keep the extension version identical to the crate / release tag.
           npm version "${VERSION}" --no-git-tag-version --allow-same-version
           npm ci
-          npx --yes @vscode/vsce package --out "$GITHUB_WORKSPACE/dist/"
+          npm run vsix -- --out "$GITHUB_WORKSPACE/dist/"
 
       - name: Generate SHA-256 checksums
         run: |
