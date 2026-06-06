@@ -58,6 +58,13 @@ The VS Code extension is published as a `.vsix` file on the same GitHub release 
 
 If `owui-lint` is installed somewhere custom, set `owui-lint.path` to the absolute binary path.
 
+For local development, build the extension package with:
+
+```bash
+npm ci --prefix editors/vscode
+npm run vsix --prefix editors/vscode
+```
+
 ## Uninstall
 
 macOS and Linux:

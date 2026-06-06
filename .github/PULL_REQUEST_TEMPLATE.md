@@ -27,6 +27,8 @@
 - [ ] Ran `cargo fmt -- --check` and `cargo clippy --locked -- -D warnings`.
 - [ ] Ran `cargo test --locked` (and `make test-scripts` if scripts changed).
 - [ ] Ran `make docs-check` if code or docs changed.
+- [ ] Ran `npm ci --prefix editors/vscode && npm run vsix --prefix editors/vscode`
+      if the VS Code extension changed.
 - [ ] Added manual verification notes below if automated coverage is not
       practical.
 

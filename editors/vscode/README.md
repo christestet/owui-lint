@@ -43,7 +43,7 @@ via the `owui-lint.path` setting.
 
 ```bash
 cd editors/vscode
-npm install
+npm ci
 npm run compile
 ```
 
@@ -53,8 +53,8 @@ Python file containing an Open WebUI extension to see diagnostics.
 ## Package a `.vsix`
 
 ```bash
-npm install -g @vscode/vsce
-vsce package
+npm ci
+npm run vsix
 ```
 
 ## Other editors

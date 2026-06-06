@@ -67,11 +67,17 @@ If VS Code cannot find the binary, set `owui-lint.path` to an absolute path.
 The extension source lives under `editors/vscode/`.
 
 ```bash
-npm install --prefix editors/vscode
+npm ci --prefix editors/vscode
 npm run compile --prefix editors/vscode
 ```
 
 Press <kbd>F5</kbd> in VS Code to launch an Extension Development Host.
+
+To build the same `.vsix` package used by releases:
+
+```bash
+npm run vsix --prefix editors/vscode
+```
 
 ## Other Editors
 
