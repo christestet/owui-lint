@@ -96,12 +96,18 @@ enum Commands {
         output: Option<PathBuf>,
     },
     /// Run the language server (LSP over stdio) for editor integration.
-    Server,
+    Server {
+        /// Accepted for compatibility with LSP clients that append `--stdio`;
+        /// the server always communicates over stdio.
+        #[arg(long, hide = true)]
+        stdio: bool,
+    },
 }
 
 #[derive(Debug, Parser)]
 #[command(
     name = "owui-lint",
+    version,
     about = "Lint Open WebUI extensions (Tools, Pipe, Filter, Action, Pipeline).",
     long_about = "owui-lint validates Open WebUI extension files and reports actionable issues.\n\nUse positional targets directly for linting, or use subcommands for rule discovery.",
     after_help = "Examples:\n  owui-lint extensions/\n  owui-lint lint extensions/ --format json --output lint-report.json\n  owui-lint rules\n  owui-lint explain OWT101"
@@ -158,7 +164,7 @@ where
             };
             write_or_print(&rendered, output)
         }
-        Some(Commands::Server) => match crate::server::run() {
+        Some(Commands::Server { .. }) => match crate::server::run() {
             Ok(()) => 0,
             Err(err) => {
                 eprintln!("owui-lint server error: {err}");
