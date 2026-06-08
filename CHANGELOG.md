@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/christestet/owui-lint/compare/v0.8.1...v0.8.2) (2026-06-08)
+
+
+### Bug Fixes
+
+* vsce extension ([#59](https://github.com/christestet/owui-lint/issues/59)) ([4076e34](https://github.com/christestet/owui-lint/commit/4076e3402f957de6b70d35c0ea33bb9cb6b7934a))
+
 ## [0.8.1](https://github.com/christestet/owui-lint/compare/v0.8.0...v0.8.1) (2026-06-06)
 
 
