@@ -92,6 +92,30 @@ async function stopClient(languageClient: LanguageClient | undefined): Promise<v
     return;
   }
 
+  // If the client is starting, wait for it to reach Running state before stopping
+  if (languageClient.state === State.Starting) {
+    await new Promise<void>((resolve) => {
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+      let disposeListener: vscode.Disposable | undefined;
+
+      timeoutHandle = setTimeout(() => {
+        disposeListener?.dispose();
+        resolve();
+      }, 5000); // 5 second timeout
+
+      disposeListener = languageClient.onDidChangeState((event: { oldState: State; newState: State }) => {
+        if (event.newState === State.Running) {
+          if (timeoutHandle !== undefined) {
+            clearTimeout(timeoutHandle);
+          }
+          disposeListener?.dispose();
+          resolve();
+        }
+      });
+    });
+  }
+
+  // Only stop if the client is running
   if (languageClient.state !== State.Running) {
     return;
   }
