@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3](https://github.com/christestet/owui-lint/compare/v0.8.2...v0.8.3) (2026-06-08)
+
+
+### Bug Fixes
+
+* **rules:** update rules doc url to match current open webui docs ([c27c7dd](https://github.com/christestet/owui-lint/commit/c27c7dd971f38294c9bbf4634fdd9bb0912b104c))
+
 ## [0.8.2](https://github.com/christestet/owui-lint/compare/v0.8.1...v0.8.2) (2026-06-08)
 
 
