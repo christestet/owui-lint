@@ -13,13 +13,17 @@ pub struct RuleDoc {
     pub openwebui_version: &'static str,
 }
 
-const PLUGIN_OVERVIEW: &str = "https://docs.openwebui.com/features/plugin/";
-const TOOLS_DOC: &str = "https://docs.openwebui.com/features/plugin/tools/";
-const PIPE_DOC: &str = "https://docs.openwebui.com/features/plugin/functions/pipe/";
-const FILTER_DOC: &str = "https://docs.openwebui.com/features/plugin/functions/filter/";
-const ACTION_DOC: &str = "https://docs.openwebui.com/features/plugin/functions/action/";
-const VALVES_DOC: &str = "https://docs.openwebui.com/features/plugin/tools/development/";
-const PIPELINES_DOC: &str = "https://docs.openwebui.com/pipelines/";
+const PLUGIN_OVERVIEW: &str = "https://docs.openwebui.com/features/extensibility";
+const TOOLS_DOC: &str =
+    "https://docs.openwebui.com/features/extensibility/plugin/tools/development";
+const PIPE_DOC: &str = "https://docs.openwebui.com/features/extensibility/plugin/functions/pipe";
+const FILTER_DOC: &str =
+    "https://docs.openwebui.com/features/extensibility/plugin/functions/filter";
+const ACTION_DOC: &str =
+    "https://docs.openwebui.com/features/extensibility/plugin/functions/action";
+const VALVES_DOC: &str = "https://docs.openwebui.com/features/extensibility/pipelines/valves";
+const PIPELINES_DOC: &str =
+    "https://docs.openwebui.com/features/extensibility/plugin/#what-are-pipelines";
 
 pub const OWUI001: &str = "OWUI001";
 pub const OWUI010: &str = "OWUI010";
@@ -55,7 +59,7 @@ const RULES: &[RuleDoc] = &[
         summary: "A lightweight Python delimiter/string scan found an issue. This is not full Python grammar validation.",
         remediation: "Fix the reported issue first. Optionally run `python -m py_compile <file.py>` for full syntax verification.",
         help_url: "https://docs.python.org/3/reference/index.html",
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWUI010,
@@ -64,7 +68,7 @@ const RULES: &[RuleDoc] = &[
         summary: "The file looks like an extension, but no Tools/Pipe/Filter/Action/Pipeline class was found.",
         remediation: "Define exactly one top-level extension class with a supported name.",
         help_url: PLUGIN_OVERVIEW,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWUI011,
@@ -73,7 +77,7 @@ const RULES: &[RuleDoc] = &[
         summary: "A file contains more than one extension type, which Open WebUI does not support.",
         remediation: "Keep one extension class per file and split other types into separate files.",
         help_url: PLUGIN_OVERVIEW,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWUI020,
@@ -82,7 +86,7 @@ const RULES: &[RuleDoc] = &[
         summary: "Extensions should provide a nested `Valves` or `UserValves` class for runtime configuration.",
         remediation: "Add `class Valves(BaseModel): ...` or `class UserValves(BaseModel): ...` inside the extension class.",
         help_url: VALVES_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWUI021,
@@ -91,7 +95,7 @@ const RULES: &[RuleDoc] = &[
         summary: "`Valves` and `UserValves` configuration should inherit from `pydantic.BaseModel`.",
         remediation: "Change `class Valves:` / `class UserValves:` to inherit from `BaseModel`.",
         help_url: VALVES_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWUI022,
@@ -100,7 +104,7 @@ const RULES: &[RuleDoc] = &[
         summary: "The extension does not initialize `self.valves` in `__init__` for a declared `Valves` class.",
         remediation: "Set `self.valves = self.Valves()` in `__init__`.",
         help_url: VALVES_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWUI023,
@@ -118,7 +122,7 @@ const RULES: &[RuleDoc] = &[
         summary: "Tools extension must expose at least one callable public method.",
         remediation: "Add an async public method (for example `async def search(...)`) to `Tools`.",
         help_url: TOOLS_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWT101,
@@ -127,7 +131,7 @@ const RULES: &[RuleDoc] = &[
         summary: "Tool methods should include clear docstrings so users understand capabilities.",
         remediation: "Add a descriptive docstring to each public tool method.",
         help_url: TOOLS_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWT102,
@@ -136,7 +140,7 @@ const RULES: &[RuleDoc] = &[
         summary: "Tool methods should be async; Open WebUI calls them in an async context and type-hints generate JSON schemas for the model.",
         remediation: "Use `async def method_name(...)` for all public tool methods.",
         help_url: TOOLS_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWP200,
@@ -145,7 +149,7 @@ const RULES: &[RuleDoc] = &[
         summary: "Pipe extension must define a `pipe` method.",
         remediation: "Add `async def pipe(self, body, ...)` to the `Pipe` class.",
         help_url: PIPE_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWP201,
@@ -154,7 +158,7 @@ const RULES: &[RuleDoc] = &[
         summary: "Pipe extensions should not define `inlet` or `outlet` methods.",
         remediation: "Remove `inlet`/`outlet`, or convert this class to a `Filter` extension.",
         help_url: PIPE_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWP202,
@@ -163,7 +167,7 @@ const RULES: &[RuleDoc] = &[
         summary: "Synchronous `pipe` methods reduce compatibility with Open WebUI runtime execution.",
         remediation: "Use `async def pipe(...)` and await I/O operations.",
         help_url: PIPE_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWF300,
@@ -172,7 +176,7 @@ const RULES: &[RuleDoc] = &[
         summary: "Filter extension must implement `inlet`, `outlet`, `stream`, or a combination of them.",
         remediation: "Add at least one of `inlet`, `outlet`, or `stream` methods.",
         help_url: FILTER_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWF301,
@@ -181,7 +185,7 @@ const RULES: &[RuleDoc] = &[
         summary: "`Filter.inlet` should return the transformed request body.",
         remediation: "Return `body` (or the modified body) from `inlet`.",
         help_url: FILTER_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWF303,
@@ -190,7 +194,7 @@ const RULES: &[RuleDoc] = &[
         summary: "`Filter.inlet`/`Filter.outlet` should declare `body`, and `Filter.stream` should declare `event`, matching Open WebUI keyword injection.",
         remediation: "Use `inlet(self, body, ...)` and `outlet(self, body, ...)`; for stream use `stream(self, event, ...)`.",
         help_url: FILTER_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWF304,
@@ -199,7 +203,7 @@ const RULES: &[RuleDoc] = &[
         summary: "`Filter.stream` should accept an `event` parameter to receive streamed events from Open WebUI.",
         remediation: "Change signature to `stream(self, event, ...)`.",
         help_url: FILTER_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWA400,
@@ -208,7 +212,7 @@ const RULES: &[RuleDoc] = &[
         summary: "Action extension must define an `action` method.",
         remediation: "Add `async def action(self, body, ...)` to the class.",
         help_url: ACTION_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWA402,
@@ -217,7 +221,7 @@ const RULES: &[RuleDoc] = &[
         summary: "`Action.action` should accept a `body` parameter, matching Open WebUI keyword injection.",
         remediation: "Change signature to `action(self, body, ...)`.",
         help_url: ACTION_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWA401,
@@ -226,7 +230,7 @@ const RULES: &[RuleDoc] = &[
         summary: "Synchronous `action` methods may not behave correctly in async execution contexts.",
         remediation: "Use `async def action(...)` and await I/O operations.",
         help_url: ACTION_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWPL500,
@@ -235,7 +239,7 @@ const RULES: &[RuleDoc] = &[
         summary: "Pipeline extension must define `pipe` (pipe type), `pipes` (manifold type), or filter hooks (`inlet`/`outlet`/`stream`).",
         remediation: "Add `pipe` for a standard pipeline, `pipes` for a manifold returning multiple models, or filter hooks for a filter-type pipeline.",
         help_url: PIPELINES_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWPL501,
@@ -244,7 +248,7 @@ const RULES: &[RuleDoc] = &[
         summary: "`Pipeline.__init__` should assign `self.name` for clearer labeling.",
         remediation: "Set `self.name = \"...\"` in `__init__`.",
         help_url: PIPELINES_DOC,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWUI030,
@@ -253,7 +257,7 @@ const RULES: &[RuleDoc] = &[
         summary: "The module docstring header does not include a `version:` field.",
         remediation: "Add `version: 0.1.0` (or your current version) to the module docstring.",
         help_url: PLUGIN_OVERVIEW,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWUI031,
@@ -262,7 +266,7 @@ const RULES: &[RuleDoc] = &[
         summary: "One or more packages in `requirements:` have no version specifier.",
         remediation: "Add a version specifier to each package, e.g. change `llama-index` to `llama-index>=0.1.2` (or pin exactly with `==`).",
         help_url: PLUGIN_OVERVIEW,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
     RuleDoc {
         id: OWUI032,
@@ -271,7 +275,7 @@ const RULES: &[RuleDoc] = &[
         summary: "The module docstring header does not include a `title:` field, which Open WebUI uses as the display name in the UI.",
         remediation: "Add `title: My Extension Name` to the module docstring.",
         help_url: PLUGIN_OVERVIEW,
-        openwebui_version: "0.0.0",
+        openwebui_version: "0.1.0",
     },
 ];
 
