@@ -72,6 +72,7 @@
         "owui-lint.path": {
           "type": "string",
           "default": "owui-lint",
+          "scope": "window",
           "markdownDescription": "Path to the `owui-lint` executable. Use `owui-lint` from `PATH`, an absolute path, a workspace-relative path such as `target/debug/owui-lint`, or `${workspaceFolder}/target/debug/owui-lint`."
         },
         "owui-lint.trace.server": {
@@ -82,6 +83,7 @@
             "verbose"
           ],
           "default": "off",
+          "scope": "window",
           "description": "Trace the communication between VS Code and the owui-lint language server."
         }
       }
