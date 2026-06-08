@@ -28,11 +28,20 @@ via the `owui-lint.path` setting.
 }
 ```
 
+For local development in this repository, build the binary and point the
+extension at the workspace-local executable:
+
+```jsonc
+{
+  "owui-lint.path": "target/debug/owui-lint"
+}
+```
+
 ### Settings
 
 | Setting | Default | Description |
 |---|---|---|
-| `owui-lint.path` | `owui-lint` | Path to the `owui-lint` executable. |
+| `owui-lint.path` | `owui-lint` | Path to the `owui-lint` executable. Supports commands on `PATH`, absolute paths, workspace-relative paths, and `${workspaceFolder}`. |
 | `owui-lint.trace.server` | `off` | LSP trace level: `off`, `messages`, or `verbose`. |
 
 ### Commands

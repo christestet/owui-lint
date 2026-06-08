@@ -72,7 +72,7 @@
         "owui-lint.path": {
           "type": "string",
           "default": "owui-lint",
-          "markdownDescription": "Path to the `owui-lint` executable. Defaults to `owui-lint` on your PATH."
+          "markdownDescription": "Path to the `owui-lint` executable. Use `owui-lint` from `PATH`, an absolute path, a workspace-relative path such as `target/debug/owui-lint`, or `${workspaceFolder}/target/debug/owui-lint`."
         },
         "owui-lint.trace.server": {
           "type": "string",
