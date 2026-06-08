@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.4](https://github.com/christestet/owui-lint/compare/v0.8.3...v0.8.4) (2026-06-08)
+
+
+### Bug Fixes
+
+* extension Server start and end ([#63](https://github.com/christestet/owui-lint/issues/63)) ([077c726](https://github.com/christestet/owui-lint/commit/077c726f95afcd316ef026a6c9e3832eaa021b37))
+
 ## [0.8.3](https://github.com/christestet/owui-lint/compare/v0.8.2...v0.8.3) (2026-06-08)
 
 
