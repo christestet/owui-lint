@@ -1,5 +1,5 @@
 <h1>
-  <img src="docs/src/assets/owui-lint-icon.svg" alt="" width="24" height="24">
+  <img src="assets/icon.svg" alt="" width="24" height="24">
   owui-lint
 </h1>
 

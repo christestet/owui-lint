@@ -14,7 +14,7 @@ NPM_CACHE ?= .npm-cache
 ASTRO_TELEMETRY_DISABLED ?= 1
 RUST_DOCKER_RUN = docker run --rm -v "$$(pwd):/work" -w /work $(RUST_IMAGE) bash -lc 'export PATH=/usr/local/cargo/bin:$$PATH && rustup component add rustfmt clippy && make $(1)'
 
-.PHONY: help build build-release release fmt fmt-check lint test test-scripts docs-sync docs-check docs-site-install docs-site-build docs-site-check vscode-extension-install vscode-extension-build vscode-extension-package vscode-extension-check check run run-json run-sarif dist install ci ci-check clean docker-build docker-run docker-install docker-check docker-ci
+.PHONY: help build build-release release fmt fmt-check lint test test-scripts assets-sync assets-check docs-sync docs-check docs-site-install docs-site-build docs-site-check vscode-extension-install vscode-extension-build vscode-extension-package vscode-extension-check check run run-json run-sarif dist install ci ci-check clean docker-build docker-run docker-install docker-check docker-ci
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*##"; print "Available targets:"} /^[a-zA-Z0-9_.-]+:.*##/ {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -43,6 +43,12 @@ test-scripts: ## Run shell script tests
 	bash scripts/test-new-rule.sh
 	bash scripts/test-sync-readme.sh
 
+assets-sync: ## Mirror master assets/ icons into docs and editor copies
+	bash scripts/sync-assets.sh --write
+
+assets-check: ## Verify generated asset copies match the assets/ masters
+	bash scripts/sync-assets.sh --check
+
 docs-sync: ## Regenerate README and generated docs site references from live CLI output
 	cargo run --locked --bin docs-sync -- --write
 
@@ -56,7 +62,7 @@ docs-site-check: docs-site-install ## Audit and validate the Starlight docs site
 	npm audit --prefix docs --cache $(NPM_CACHE)
 	ASTRO_TELEMETRY_DISABLED=$(ASTRO_TELEMETRY_DISABLED) npm run check --prefix docs --cache $(NPM_CACHE)
 
-docs-check: ## Fail if generated docs are out of date and docs site is valid
+docs-check: assets-check ## Fail if generated docs/assets are out of date and docs site is valid
 	cargo run --locked --bin docs-sync -- --check
 	$(MAKE) docs-site-check
 
@@ -71,7 +77,7 @@ vscode-extension-package: vscode-extension-install ## Build the VS Code extensio
 
 vscode-extension-check: vscode-extension-package ## Verify the VS Code extension can be packaged
 
-check: fmt-check lint test test-scripts ## Run all quality gates
+check: fmt-check lint test test-scripts assets-check ## Run all quality gates
 
 run: ## Run owui-lint against TARGET (default: .)
 	cargo run --locked -- $(TARGET) $(RUN_ARGS)
