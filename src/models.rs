@@ -52,6 +52,9 @@ pub struct FunctionInfo {
     pub line: usize,
     pub column: usize,
     pub args: Vec<String>,
+    /// Parameter names lacking a type annotation, excluding `self`/`cls`, varargs, and
+    /// Open WebUI reserved dunder args. Drives OWT103.
+    pub untyped_args: Vec<String>,
     pub decorators: Vec<String>,
     pub is_async: bool,
     pub has_docstring: bool,

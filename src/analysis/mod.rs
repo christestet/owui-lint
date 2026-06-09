@@ -393,6 +393,7 @@ fn function_info(definition: FunctionDef, line: usize, column: usize) -> Functio
         line,
         column,
         args: definition.args,
+        untyped_args: definition.untyped_args,
         decorators: Vec::new(),
         is_async: definition.is_async,
         has_docstring: false,

@@ -10,8 +10,8 @@ use crate::glob::glob_match;
 use crate::models::{ClassInfo, Issue, LintSummary, ModuleInfo, Severity, SeverityOverride};
 use crate::rules::{
     OWA400, OWA401, OWA402, OWF300, OWF301, OWF303, OWF304, OWP200, OWP201, OWP202, OWPL500,
-    OWPL501, OWT100, OWT101, OWT102, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021, OWUI022, OWUI023,
-    OWUI030, OWUI031, OWUI032, issue,
+    OWPL501, OWT100, OWT101, OWT102, OWT103, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021, OWUI022,
+    OWUI023, OWUI030, OWUI031, OWUI032, issue,
 };
 
 const EXTENSION_CLASSES: [(&str, &str); 5] = [
@@ -424,6 +424,19 @@ fn lint_tools(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
                 format!("Tool method '{}' should be async.", method.name),
             ));
         }
+        if !method.untyped_args.is_empty() {
+            issues.push(issue(
+                OWT103,
+                path,
+                method.line,
+                method.column,
+                format!(
+                    "Tool method '{}' has parameter(s) without type hints: {}.",
+                    method.name,
+                    method.untyped_args.join(", ")
+                ),
+            ));
+        }
     }
 
     issues
@@ -752,5 +765,31 @@ mod tests {
         let issues = lint_source(Path::new("/virtual/tools.py"), TOOLS_SOURCE, &config);
         assert!(issues.iter().all(|issue| issue.rule_id != "OWT102"));
         assert!(issues.iter().any(|issue| issue.rule_id == "OWT101"));
+    }
+
+    #[test]
+    fn owt103_fires_on_untyped_tool_param() {
+        // `query` has no type annotation.
+        let issues = lint_source(
+            Path::new("/virtual/tools.py"),
+            TOOLS_SOURCE,
+            &Config::default(),
+        );
+        assert!(issues.iter().any(|issue| issue.rule_id == "OWT103"));
+    }
+
+    #[test]
+    fn owt103_silent_when_params_are_typed() {
+        let source = "class Tools:\n    async def search(self, query: str) -> str:\n        \"\"\"Search.\"\"\"\n        return query\n";
+        let issues = lint_source(Path::new("/virtual/tools.py"), source, &Config::default());
+        assert!(issues.iter().all(|issue| issue.rule_id != "OWT103"));
+    }
+
+    #[test]
+    fn owt103_ignores_self_and_reserved_dunder_args() {
+        // Only untyped params are `self` and the reserved `__user__` / `__event_emitter__`.
+        let source = "class Tools:\n    async def search(self, query: str, __user__, __event_emitter__) -> str:\n        \"\"\"Search.\"\"\"\n        return query\n";
+        let issues = lint_source(Path::new("/virtual/tools.py"), source, &Config::default());
+        assert!(issues.iter().all(|issue| issue.rule_id != "OWT103"));
     }
 }

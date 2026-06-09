@@ -4,6 +4,9 @@ use crate::util::strip_inline_comment;
 pub(super) struct FunctionDef {
     pub(super) name: String,
     pub(super) args: Vec<String>,
+    /// Names of parameters that carry no type annotation, excluding `self`/`cls`,
+    /// `*args`/`**kwargs`, and Open WebUI reserved dunder args (`__user__`, …).
+    pub(super) untyped_args: Vec<String>,
     pub(super) is_async: bool,
     pub(super) returns_annotation: bool,
 }
@@ -104,7 +107,7 @@ pub(super) fn parse_function_definition(trimmed: &str) -> Option<FunctionDef> {
     }
 
     let args_raw = &payload[open_paren + 1..closing_paren];
-    let args = parse_args(args_raw);
+    let (args, untyped_args) = parse_args(args_raw);
 
     let tail = payload[closing_paren + 1..].trim();
     let returns_annotation = tail.starts_with("->");
@@ -112,31 +115,50 @@ pub(super) fn parse_function_definition(trimmed: &str) -> Option<FunctionDef> {
     Some(FunctionDef {
         name: name.to_string(),
         args,
+        untyped_args,
         is_async,
         returns_annotation,
     })
 }
 
-fn parse_args(raw: &str) -> Vec<String> {
+/// Returns `(all_arg_names, untyped_arg_names)`. The untyped list excludes `self`/`cls`,
+/// `*args`/`**kwargs`, and Open WebUI reserved dunder args (`__user__`, `__event_emitter__`,
+/// …) since those are not part of the model-facing tool schema.
+fn parse_args(raw: &str) -> (Vec<String>, Vec<String>) {
     let mut args = Vec::new();
+    let mut untyped_args = Vec::new();
     for part in raw.split(',') {
         let token = part.trim();
         if token.is_empty() {
             continue;
         }
         let without_default = token.split('=').next().unwrap_or(token).trim();
+        let has_annotation = without_default.contains(':');
         let without_type = without_default
             .split(':')
             .next()
             .unwrap_or(without_default)
             .trim();
+        let is_vararg = without_type.starts_with('*');
         let normalized = without_type.trim_start_matches('*').trim();
-        if is_valid_identifier(normalized) {
-            args.push(normalized.to_string());
+        if !is_valid_identifier(normalized) {
+            continue;
         }
+        args.push(normalized.to_string());
+
+        if has_annotation || is_vararg || is_schema_excluded_param(normalized) {
+            continue;
+        }
+        untyped_args.push(normalized.to_string());
     }
 
-    args
+    (args, untyped_args)
+}
+
+/// Parameters that never appear in the model-facing JSON schema and therefore do not
+/// require type hints: the instance/class receiver and Open WebUI reserved dunder args.
+fn is_schema_excluded_param(name: &str) -> bool {
+    name == "self" || name == "cls" || (name.starts_with("__") && name.ends_with("__"))
 }
 
 pub(super) fn parse_class_definition(trimmed: &str) -> Option<(String, Vec<String>)> {

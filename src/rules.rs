@@ -21,9 +21,11 @@ const FILTER_DOC: &str =
     "https://docs.openwebui.com/features/extensibility/plugin/functions/filter";
 const ACTION_DOC: &str =
     "https://docs.openwebui.com/features/extensibility/plugin/functions/action";
-const VALVES_DOC: &str = "https://docs.openwebui.com/features/extensibility/pipelines/valves";
-const PIPELINES_DOC: &str =
-    "https://docs.openwebui.com/features/extensibility/plugin/#what-are-pipelines";
+const VALVES_DOC: &str =
+    "https://docs.openwebui.com/features/extensibility/plugin/development/valves";
+const VALVES_INPUT_TYPES_DOC: &str =
+    "https://docs.openwebui.com/features/extensibility/plugin/development/valves#input-types";
+const PIPELINES_DOC: &str = "https://docs.openwebui.com/features/extensibility/pipelines/";
 
 pub const OWUI001: &str = "OWUI001";
 pub const OWUI010: &str = "OWUI010";
@@ -34,6 +36,7 @@ pub const OWUI022: &str = "OWUI022";
 pub const OWT100: &str = "OWT100";
 pub const OWT101: &str = "OWT101";
 pub const OWT102: &str = "OWT102";
+pub const OWT103: &str = "OWT103";
 pub const OWP200: &str = "OWP200";
 pub const OWP201: &str = "OWP201";
 pub const OWP202: &str = "OWP202";
@@ -112,7 +115,7 @@ const RULES: &[RuleDoc] = &[
         title: "Sensitive valve field not masked",
         summary: "A `Valves` or `UserValves` field name suggests sensitive data (API key, token, password) but does not use the password input type to mask UI display.",
         remediation: "Add `json_schema_extra={\"input\": {\"type\": \"password\"}}` to the Field() definition.",
-        help_url: "https://docs.openwebui.com/features/extensibility/plugin/development/valves#input-types",
+        help_url: VALVES_INPUT_TYPES_DOC,
         openwebui_version: "0.8.0",
     },
     RuleDoc {
@@ -137,8 +140,17 @@ const RULES: &[RuleDoc] = &[
         id: OWT102,
         default_severity: Severity::Warning,
         title: "Tool method should be async",
-        summary: "Tool methods should be async; Open WebUI calls them in an async context and type-hints generate JSON schemas for the model.",
+        summary: "Tool methods should be async for future compatibility: Open WebUI's backend is progressively moving to fully async execution, and synchronous methods may block or break in future releases.",
         remediation: "Use `async def method_name(...)` for all public tool methods.",
+        help_url: TOOLS_DOC,
+        openwebui_version: "0.1.0",
+    },
+    RuleDoc {
+        id: OWT103,
+        default_severity: Severity::Warning,
+        title: "Tool method missing type hints",
+        summary: "A tool method parameter has no type hint. Open WebUI derives the JSON schema sent to the model from these annotations; without them the model invokes the tool far less reliably.",
+        remediation: "Add type hints to every tool-method parameter, e.g. `async def search(self, query: str) -> str:`.",
         help_url: TOOLS_DOC,
         openwebui_version: "0.1.0",
     },
