@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/christestet/owui-lint/compare/v0.9.0...v0.10.0) (2026-06-09)
+
+
+### Features
+
+* owui secrules ([#68](https://github.com/christestet/owui-lint/issues/68)) ([d7b6a13](https://github.com/christestet/owui-lint/commit/d7b6a138472cbef12524cbb888dfee0d5676f1ca))
+
 ## [0.9.0](https://github.com/christestet/owui-lint/compare/v0.8.4...v0.9.0) (2026-06-09)
 
 
