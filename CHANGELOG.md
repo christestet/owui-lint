@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/christestet/owui-lint/compare/v0.8.4...v0.9.0) (2026-06-09)
+
+
+### Features
+
+* **vscode:** add enable/extraArgs settings and update commands ([#66](https://github.com/christestet/owui-lint/issues/66)) ([c1affb1](https://github.com/christestet/owui-lint/commit/c1affb184ef4c86ae7d087a4cbf54cdb25f60bb0))
+
 ## [0.8.4](https://github.com/christestet/owui-lint/compare/v0.8.3...v0.8.4) (2026-06-08)
 
 
