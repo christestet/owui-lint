@@ -23,36 +23,46 @@ Before writing any code, read the appropriate reference file:
 | Valves, Events & Reserved Args | `references/development-common.md` | Always read — covers Valves, Events, Reserved Args, Rich UI |
 | Pitfalls & Troubleshooting | `references/pitfalls-and-troubleshooting.md` | Always read — covers common mistakes, debugging, model compatibility |
 
-### Source Code References (Open WebUI Backend)
+### Source Code References (Open WebUI Backend + Pipelines)
 
 These are actual Python source files from the Open WebUI codebase. Read them when you need exact function signatures, parameter handling, class detection, or runtime behavior.
 
+> **Auto-synced & provenanced.** Every file in this table (plus the four raw doc
+> snapshots `*.mdx`) is fetched verbatim from upstream `main` by
+> `scripts/sync-owui-sources.sh` — no hand edits, no per-file version stamps. Current
+> pin and checksums live in [`references/SOURCES.md`](references/SOURCES.md)
+> (last synced **2026-06-09**, owui-lint **0.9.0**, open-webui **v0.9.6** /
+> `main@02dc3e68`). Refresh with `make owui-sources-sync`; detect upstream drift with
+> `make owui-sources-check`. **Cite these by symbol, never by line number** — line
+> numbers drift across releases.
+
 | Source File | What It Covers | When to Read |
 |---|---|---|
-| `references/plugin.py` | Module loading (`load_function_module_by_id`, `load_tool_module_by_id`), frontmatter extraction, import replacement, Valves schema resolution, caching | Understanding how extensions are loaded, how class names (`Pipe`/`Filter`/`Action`/`Tools`) are detected, how frontmatter requirements work |
+| `references/plugin.py` | Module loading (`load_function_module_by_id`, `load_tool_module_by_id`), frontmatter extraction, import replacement, Valves schema resolution, caching | Understanding how Tools/Functions are loaded via `exec()` + `module.Tools()`/`Pipe()`/`Filter()`/`Action()`, how class names are detected, how frontmatter requirements work. **Does not cover Pipelines** (separate loader → see `pipelines-main.py`) |
 | `references/tools.py` | Tool execution (`get_tools`), built-in tools (`get_builtin_tools`), spec generation, tool server integration, access control | Understanding tool loading, function-to-spec conversion, reserved parameter injection (`__user__`, `__event_emitter__`, etc.) |
-| `references/filter.py` | Filter processing (`process_filter_functions`), filter ordering/priority, inlet/outlet/stream handler execution | Understanding how filters are chained, how `inlet()`/`outlet()` are called, `file_handler` behavior |
+| `references/filter.py` | Filter processing (`process_filter_functions`), filter ordering/priority, inlet/outlet/stream handler execution, `Valves(**…)`/`UserValves` instantiation | Understanding how filters are chained, how `inlet()`/`outlet()` are called, how valves are constructed, `file_handler` behavior |
 | `references/actions.py` | Action execution (`chat_action`), sub-action routing, event emitter/call setup | Understanding how `action()` is invoked, which reserved args are passed, Rich UI embed processing |
+| `references/pipelines-main.py` | **Pipelines** loader (`open-webui/pipelines`, a separate repo): `load_module_from_path` via `importlib` `exec_module()` then `module.Pipeline()`, valves.json handling, lifecycle (`on_startup`/`on_shutdown`/`inlet`/`outlet`/`pipe`) | Understanding how Pipeline servers load and run — a different mechanism than the backend `plugin.py`, with a `Pipeline` class instead of `Tools`/`Pipe`/`Filter`/`Action` |
 
 **ALWAYS read `references/development-common.md` AND `references/pitfalls-and-troubleshooting.md` in addition to the type-specific reference.** The common reference contains critical information about Valves, Events, Reserved Args, and Rich UI. The pitfalls reference covers the most frequently encountered issues (wrong class names, silent failures, streaming hangs, tool calling problems) and their solutions — reading it before coding prevents most debugging sessions.
 
 #### Official Documentation & Source URLs
 
-If the local reference files lack detail for an edge case, or if you need to verify against the latest API, fetch the relevant official doc or source file. **Use local references first** — only fetch URLs when you need additional depth.
+If the local reference files lack detail for an edge case, or if you need to verify against the latest API, fetch the relevant official doc or source file. **Use local references first** — only fetch URLs when you need additional depth. Rows marked 📄 have a verbatim raw snapshot under `references/` (auto-synced; see `references/SOURCES.md`).
 
 | Topic | URL |
 |-------|-----|
 | **Core Extension Docs** | |
-| Tools & Functions overview | https://docs.openwebui.com/features/extensibility/plugin/ |
+| Tools & Functions overview | https://docs.openwebui.com/features/extensibility/plugin/ — 📄 `references/plugin-overview.mdx` |
 | Functions overview | https://docs.openwebui.com/features/extensibility/plugin/functions/ |
 | Pipe Functions | https://docs.openwebui.com/features/extensibility/plugin/functions/pipe |
 | Filter Functions | https://docs.openwebui.com/features/extensibility/plugin/functions/filter |
 | Action Functions | https://docs.openwebui.com/features/extensibility/plugin/functions/action |
 | Tools (Workspace) | https://docs.openwebui.com/features/extensibility/plugin/tools/ |
-| Tool Development | https://docs.openwebui.com/features/extensibility/plugin/tools/development |
+| Tool Development | https://docs.openwebui.com/features/extensibility/plugin/tools/development — 📄 `references/tools-development.mdx` |
 | **Development APIs** | |
-| Events (event_emitter, event_call) | https://docs.openwebui.com/features/extensibility/plugin/development/events |
-| Valves & UserValves | https://docs.openwebui.com/features/extensibility/plugin/development/valves |
+| Events (event_emitter, event_call) | https://docs.openwebui.com/features/extensibility/plugin/development/events — 📄 `references/events.mdx` |
+| Valves & UserValves | https://docs.openwebui.com/features/extensibility/plugin/development/valves — 📄 `references/valves.mdx` |
 | Rich UI Embedding | https://docs.openwebui.com/features/extensibility/plugin/development/rich-ui |
 | Reserved Args (__user__, __request__) | https://docs.openwebui.com/features/extensibility/plugin/development/reserved-args |
 | **Pipelines** | |
@@ -64,7 +74,7 @@ If the local reference files lack detail for an edge case, or if you need to ver
 | Functions parsing module | https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/functions.py |
 | Functions Pydantic model | https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/models/functions.py |
 | Tools Pydantic model | https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/models/tools.py |
-| Pipelines main code | https://raw.githubusercontent.com/open-webui/pipelines/refs/heads/main/main.py |
+| Pipelines main code | https://raw.githubusercontent.com/open-webui/pipelines/refs/heads/main/main.py — 📄 `references/pipelines-main.py` |
 | **Other** | |
 | Troubleshooting | https://docs.openwebui.com/troubleshooting/ |
 

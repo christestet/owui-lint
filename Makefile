@@ -14,7 +14,7 @@ NPM_CACHE ?= .npm-cache
 ASTRO_TELEMETRY_DISABLED ?= 1
 RUST_DOCKER_RUN = docker run --rm -v "$$(pwd):/work" -w /work $(RUST_IMAGE) bash -lc 'export PATH=/usr/local/cargo/bin:$$PATH && rustup component add rustfmt clippy && make $(1)'
 
-.PHONY: help build build-release release fmt fmt-check lint test test-scripts assets-sync assets-check docs-sync docs-check docs-site-install docs-site-build docs-site-check vscode-extension-install vscode-extension-build vscode-extension-package vscode-extension-check check run run-json run-sarif dist install ci ci-check clean docker-build docker-run docker-install docker-check docker-ci
+.PHONY: help build build-release release fmt fmt-check lint test test-scripts assets-sync assets-check owui-sources-sync owui-sources-check docs-sync docs-check docs-site-install docs-site-build docs-site-check vscode-extension-install vscode-extension-build vscode-extension-package vscode-extension-check check run run-json run-sarif dist install ci ci-check clean docker-build docker-run docker-install docker-check docker-ci
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*##"; print "Available targets:"} /^[a-zA-Z0-9_.-]+:.*##/ {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -48,6 +48,12 @@ assets-sync: ## Mirror master assets/ icons into docs and editor copies
 
 assets-check: ## Verify generated asset copies match the assets/ masters
 	bash scripts/sync-assets.sh --check
+
+owui-sources-sync: ## Fetch upstream Open WebUI source/docs (ground truth for OWSEC rules)
+	bash scripts/sync-owui-sources.sh --write
+
+owui-sources-check: ## Fail if bundled OWUI ground-truth copies drifted from upstream
+	bash scripts/sync-owui-sources.sh --check
 
 docs-sync: ## Regenerate README and generated docs site references from live CLI output
 	cargo run --locked --bin docs-sync -- --write

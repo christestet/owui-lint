@@ -51,22 +51,40 @@ Sources:
 ### 2. The loading mechanism proves import-time execution technically
 
 In the backend original (`backend/open_webui/utils/plugin.py`,
-`load_function_module_by_id` / `load_tool_module_by_id`):
+`load_function_module_by_id` / `load_tool_module_by_id`), two steps run back-to-back:
 
 ```python
-exec(content, module.__dict__)
+exec(content, module.__dict__)        # 1. runs the entire file body
+...
+return module.Tools(), frontmatter    # 2. immediately INSTANTIATES the class
+# (likewise module.Pipe() / module.Filter() / module.Action())
 ```
 
-The **entire file body** runs at load time. As a result, code at module level and in
-`__init__`/Valves constructors runs **immediately on import** — no tool call, no user
-consent. This makes "network call at import time" or "`subprocess` in the class body"
-a qualitatively sharper threat than the same code in a method body. Crucially, this
-scope distinction (module/init level vs. method body) is **not** something generic
-Python linters (Bandit/Ruff) assess in the OWUI context.
+Two distinct import-time execution paths follow, and the distinction matters for how
+we assign scope severity:
 
-Source: local reference copy `.agents/openwebui-extensions/references/plugin.py`
-(lines ~199–290), original:
-<https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/utils/plugin.py>
+1. **Module body + class-body / Pydantic field defaults** run in step 1 (`exec`).
+   `x: str = subprocess.run(...)` as a Valves field default executes here — at class
+   *definition* time, i.e. import time.
+2. **`__init__` bodies** run in step 2 — but **only because OWUI itself constructs the
+   object** (`module.Tools()`). `exec` alone does *not* run `__init__`; the
+   instantiation does. This is the precise, verifiable reason `__init__` (and any
+   `self.Valves()` it calls) is import-time.
+
+Either way: code at module/init scope runs **with no tool call and no user consent**,
+making "network call at import time" or "`subprocess` in the class body" a
+qualitatively sharper threat than the same code in a method body. This scope
+distinction is **not** something generic linters (Bandit/Ruff) assess in the OWUI
+context.
+
+> **Evidence is pinned by symbol, not line number.** The bundled reference copy of
+> `plugin.py` already drifted from upstream `main` (same code, different lines), so
+> citing line ranges would encode a falsehood. `scripts/sync-owui-sources.sh` pulls the
+> current upstream source/docs with provenance (`SOURCES.md`), and `make
+> owui-sources-check` alarms on drift so claims are re-verified against the real
+> implementation rather than a frozen snapshot.
+
+Source: <https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/utils/plugin.py>
 
 ### 3. `requirements` frontmatter → `pip install` (supply-chain vector)
 
@@ -158,6 +176,10 @@ opinionated.
   bet.
 - Security rules with a high false-positive rate are toxic (the tool gets turned off).
   Conservative defaults and an opt-in `--security` profile are mandatory.
+- The scanner is structure-only (no data-flow/taint). Detections that need "value X
+  reaches sink Y" — env→external-call exfiltration, "write outside the data dir",
+  proving an arg is dynamic — are **rescoped to a presence+scope core**, not promised.
+  The full data-flow version is deferred (see `OWUI_SEC.md` §2.1, §4).
 - Version/compatibility knowledge goes stale without maintenance and then becomes
   *wrong*.
 
