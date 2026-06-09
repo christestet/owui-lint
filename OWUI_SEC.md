@@ -177,11 +177,11 @@ owui-sources-check`), so the behavior we assume is the behavior OWUI implements.
 
 ### Phase 1 — Spike / PoC (goal: feasibility + measure FP rate)
 
-1. Add a scope tracker in `analysis/` (`ModuleLevel` / `InitBody` /
-   `ValvesConstruct` / `MethodBody`). Unit tests with small snippets.
+1. Add a scope tracker in `analysis/` (`ModuleLevel` / `InitBody` / `MethodBody` —
+   `ValvesConstruct` was dropped, see §2). Unit tests with small snippets.
 2. Implement **one** rule as proof: **`OWSEC001` — "Code execution at import time"**
    (trigger: `subprocess.*`, `os.system`, `eval`, `exec`, `__import__`, network calls
-   at `ModuleLevel`/`InitBody`/`ValvesConstruct`).
+   at `ModuleLevel`/`InitBody`).
 3. Build the two corpora the measurement needs (the repo has only one today):
    - **Clean corpus = `examples/**`** (32 real community plugins). These are
      well-formed; expect them to contain **~zero** real import-time-exec findings. So
@@ -197,24 +197,112 @@ owui-sources-check`), so the behavior we assume is the behavior OWUI implements.
 **Definition of Done Phase 1:** `OWSEC001` runs; malicious fixtures detected; FP count
 on `examples/` ≤ 2 and documented (file + line for each); `make docker-check` green.
 
-> **Phase 1 status: DONE (abort criterion passed).** The scope-aware call-site tracker
-> (`CallScope::{ModuleLevel,InitBody,MethodBody}` in `models.rs`, `extract_calls` in
-> `analysis/parsing.rs`, scope tagging in `analysis/mod.rs`) and `OWSEC001` ship behind
-> an opt-in security profile (`--security` / `security: true`, off by default — no FP
-> regression for existing users). Measurement:
-> - **Clean corpus** (`examples/**`, 33 files): **0 OWSEC001 findings** — well under the
->   ≤2 threshold. Verified non-vacuous: the corpus contains many `requests.`/`httpx.`
->   sink calls (e.g. `jira_agent.py` ×7, `n8n_chats.py` ×8) all correctly classified as
->   `MethodBody` and suppressed; a sweep for indent-0 / bare-builtin sinks found none, so
->   no false negatives are masked.
-> - **Malicious corpus** (`tests/fixtures/owsec/`): 3/3 detected — `module_level_subprocess.py:12`
->   (ModuleLevel), `init_network.py:20` (InitBody), `valves_field_default_eval.py:15`
->   (class-body field default → ModuleLevel). Negative fixture `clean_method_only.py` → 0.
->
-> The indentation-based engine was sufficient; **`rustpython-parser` was not needed**.
-> Phase 2 is unblocked. Note: code guarded by `if __name__ == "__main__":` is currently
-> treated as `ModuleLevel` even though it does not run under `exec` as a module — a known
-> potential FP source, not observed in the corpus; add a guard if Phase 2 surfaces it.
+---
+
+### Phase 1 — Implementation record (DONE ✅, 2026-06-09)
+
+**Abort criterion passed → Phase 2 unblocked.** Built and committed-ready behind the
+opt-in security profile, off by default.
+
+**What shipped (where to look):**
+
+- **Scope-aware call-site tracker.** `CallScope::{ModuleLevel,InitBody,MethodBody}` +
+  `CallSite` in `src/models.rs`; `extract_calls` (string/comment-aware textual call
+  detection) in `src/analysis/parsing.rs`; per-statement scope tagging in
+  `src/analysis/mod.rs` (`current_call_scope`). `ModuleInfo` now carries
+  `call_sites: Vec<CallSite>`.
+- **`OWSEC001` — code execution at import time** (Error). `src/rules.rs` const + RuleDoc;
+  detection `lint_security` + sink classifier `import_time_exec_category` in
+  `src/linter.rs`. Sinks: `subprocess.*`, `os.system`/`os.popen`/`os.spawn*`, bare
+  `eval`/`exec`/`__import__`/`compile`, network roots `requests`/`httpx`/`aiohttp`/
+  `socket`/`urllib` — fired **only** at import scope.
+- **Opt-in activation.** `Config.security` (default `false`) parsed from top-level
+  `security: true`; `--security` CLI flag (OR-ed in, can only enable). Gated in
+  `lint_module`. When off, OWSEC emits nothing.
+- **Corpora.** Malicious fixtures `tests/fixtures/owsec/` (3 positives + 1 negative);
+  integration tests `tests/owsec_tests.rs`; unit tests in `analysis/{mod,parsing}.rs`.
+- **Docs/CLI.** OWSEC got its own generated rule group ("Security (`OWSEC`)") in
+  `docs-sync`; README + `configuration.md` + `usage.md` document the profile.
+
+**Measurement (the actual abort gate):**
+
+- **Clean corpus** (`examples/**`, 33 files): **0 OWSEC001 findings** (threshold ≤2).
+  Non-vacuous: the corpus has many `requests.`/`httpx.` calls (`jira_agent.py` ×7,
+  `n8n_chats.py` ×8) all correctly classified `MethodBody` and suppressed; a sweep for
+  indent-0 / bare-builtin sinks found none → no masked false negatives.
+- **Malicious corpus**: **3/3** detected — `module_level_subprocess.py:12` (ModuleLevel),
+  `init_network.py:20` (InitBody), `valves_field_default_eval.py:15` (class-body field
+  default → ModuleLevel). Negative `clean_method_only.py` → 0.
+- Gates green: `make check` (fmt/clippy/test/test-scripts/assets), `docs-sync --check`,
+  `cargo audit` (0 vulns), `cargo machete` (0 unused), `cpd` (0.26% dup, none in new
+  code). 156 tests pass.
+
+**Decisions made (and why):**
+
+1. **Engine: kept the structure-only indentation scanner; did NOT adopt
+   `rustpython-parser`.** The PoC's job was to measure, and 0 FP / 3 TP says the simple
+   engine is sufficient *for OWSEC001*. This stays a data-driven decision — see "Next".
+2. **`InitBody` is restricted to the five entry classes** (`Tools`/`Pipe`/`Filter`/
+   `Action`/`Pipeline`). Only these are instantiated at import by OWUI, so a helper
+   class's `__init__` is *not* import-time and is classified `MethodBody`. This is the
+   precise, verifiable reason `__init__` is import-time (`module.Tools()` right after
+   `exec`, confirmed in synced `plugin.py:239/283/285/287`).
+3. **Activation model pinned** (previously "left undecided"): a single boolean profile
+   (`security`), not per-rule opt-in. CLI `--security` can only turn it *on*; it never
+   overrides a config that enabled it. Rationale: one switch is the lowest-cognitive-load
+   way to guarantee "no FP regression for existing users."
+4. **The tracker records *all* call sites, not just sinks.** Keeps `analysis/` decoupled
+   from rule-specific sink lists so later OWSEC rules (010/011/020/021/030) reuse it; the
+   per-file cost is negligible.
+5. **Call detection is callee-name + scope only** — deliberately no argument inspection,
+   matching the §2.1 scope-honesty stance. `self.exec(...)` reads as `self.exec` (not the
+   bare builtin `exec`); a space before `(` breaks the match (accepted heuristic).
+
+**Assumptions & known limitations (carry into Phase 2):**
+
+- **`if __name__ == "__main__":` guards** are currently treated as `ModuleLevel` even
+  though that block does **not** run when OWUI imports the file as a module. Potential
+  FP source; not observed in the corpus. Add a guard if Phase 2 surfaces it.
+- **Multi-line calls** are detected on the line bearing the `(`; deeply-indented
+  continuation lines are line-scanned independently (pre-existing scanner trait). Fine
+  for sink detection, which only needs the callee line.
+- **A line opening a triple-quoted string** (`x = """…`) stops call extraction at the
+  quote — a sink call *before* the opening quote on that same line would be missed
+  (rare).
+- **Decorator/default-arg calls on `def`/`class` header lines** are not scanned (those
+  lines `continue` before call extraction). Class-body field defaults *are* scanned.
+- **0 FP on 33 curated, well-formed files is a low-confidence denominator.** Real-world
+  messy plugins are the true FP distribution — see "Next".
+
+**Deviations from the original plan:**
+
+- Dropped `ValvesConstruct` scope (already foreseen in §2) — field defaults map to
+  `ModuleLevel`, hand-written `Valves.__init__` to `InitBody`/`MethodBody`.
+- Added a small `error_module()` constructor in `analysis/mod.rs` (DRY: cpd flagged the
+  duplicated empty-`ModuleInfo` literals after the `call_sites` field was added).
+
+**What's next (recommended order before/within Phase 2):**
+
+1. **Commit Phase 1** behind the flag (isolated, tested, off-by-default). Mark OWSEC
+   "preview."
+2. **Timeboxed `rustpython-parser` spike** — port OWSEC001 to a real parse tree, rerun
+   the *same* corpora, compare FP/FN + code complexity. Decide the engine **with numbers
+   before** writing rules 2–9, when migration is cheapest. (Phase 1 says "only if FP
+   forces it"; the senior-review refinement is: prove it now rather than discover it at
+   rule 9.)
+3. **Severity model** — the `Severity` enum is Error/Warning only (the `new-rule.sh`
+   script test literally *rejects* `info`). OWSEC031/050 want `Info`. Design the
+   taxonomy **once**: ideally separate axes — `level` (error/warning/info) ×
+   `confidence` (security findings are probabilistic, cf. Bandit) × `default_enabled` —
+   rather than overloading a single `Info` level. `[OPEN DECISION]`
+4. **Test/corpus infrastructure** — grow the malicious corpus, add a held-out real-world
+   corpus (scrape community Tools/Functions), and add snapshot testing so each new rule's
+   output is pinned and diffable. This is what makes rules 2–9 cheap and safe.
+5. **Inline suppression** (`# owui-lint: ignore[OWSEC001]`) + optional baseline file —
+   an adoption gate for security rules before they go wide. `[OPEN DECISION]`
+6. *Then* Phase 2 rule catalog (below), which becomes largely declarative.
+
+---
 
 ### Phase 2 — `OWSEC` rule catalog
 
@@ -227,7 +315,7 @@ prove (see §2.1); the dropped data-flow framing is noted inline.
 
 | ID | Title | Trigger (what we actually detect) | Default severity | Scope-dependent? |
 |---|---|---|---|---|
-| `OWSEC001` | Code execution at import time | `subprocess`/`os.system`/`eval`/`exec`/`__import__`/network call at `ModuleLevel`/`InitBody` | Error | yes (import scopes only) |
+| `OWSEC001` ✅ **shipped (Phase 1)** | Code execution at import time | `subprocess`/`os.system`/`eval`/`exec`/`__import__`/network call at `ModuleLevel`/`InitBody` | Error | yes (import scopes only) |
 | `OWSEC010` | Subprocess / shell execution | `subprocess.*`, `os.system`, `os.popen`, `pty.spawn` (anywhere) | Warning (Error in import scope) | severity-raising |
 | `OWSEC011` | Dynamic code evaluation | `eval`, `exec`, `compile`, `__import__` call present. *Optional weak suppression when the sole arg is a string literal — NOT a dynamic-arg proof* | Warning (Error in import scope) | severity-raising |
 | `OWSEC020` | Outbound network at import time | `requests`/`httpx`/`aiohttp`/`socket`/`urllib` call at `ModuleLevel`/`InitBody` | Error | yes |
@@ -243,10 +331,12 @@ prove (see §2.1); the dropped data-flow framing is noted inline.
 > so do **not** reuse it for OWSEC040; match OWUI's stricter rule or we flag/miss what
 > OWUI itself ignores. Validate against synced `plugin.py`.
 
-> **FP discipline & activation:** All `OWSEC` rules must default to non-interference in
-> the standard run (opt-in `--security` profile and/or conservative defaults). **Exact
-> activation model is left undecided** and will be pinned while building (config flag in
-> `config.rs`); the only hard requirement is no FP regression for existing users.
+> **FP discipline & activation (DECIDED in Phase 1):** All `OWSEC` rules default to
+> non-interference via a single opt-in profile — `Config.security` (top-level
+> `security: true`) or the `--security` CLI flag (enable-only). When the profile is off,
+> no `OWSEC` rule emits anything; when on, severities are still tunable via `rules:`
+> overrides. The hard requirement — no FP regression for existing users — is met because
+> the gate sits in `lint_module` before any OWSEC detection runs.
 
 **Per-rule checklist:**
 - [ ] `pub const OWSECxxx` + `RuleDoc` entry (with `help_url`, `openwebui_version`)
@@ -304,7 +394,14 @@ Plugin: weather_tool.py
 
 ## 5. Kickoff prompt for the new session
 
-> "Read `OWUI_SEC.md` and `docs/adr/0001-security-trust-positioning.md`. Start with
-> **Phase 1**: scope-aware AST pass + `OWSEC001` as a PoC. Measure the FP rate against
-> `examples/**` and stop before Phase 2 if the abort criterion is hit. Verify with
+> **Phase 1 is DONE** (see §3 "Phase 1 — Implementation record"): the scope-aware
+> tracker + `OWSEC001` shipped behind the opt-in `--security` profile, 0 FP on
+> `examples/**`, 3/3 fixtures detected.
+>
+> "Read `OWUI_SEC.md` (esp. the Phase 1 record + 'What's next') and
+> `docs/adr/0001-security-trust-positioning.md`. Before extending the catalog, run the
+> **timeboxed `rustpython-parser` spike** (port `OWSEC001`, rerun the corpora, compare
+> FP/FN + complexity) and settle the **severity taxonomy** (`level × confidence ×
+> default_enabled`) since `Info` doesn't exist yet. Then build the **Phase 2** rules
+> (`OWSEC010`–`OWSEC050`) on whichever engine the spike justifies. Verify with
 > `make docker-check`."

@@ -193,3 +193,39 @@ opinionated.
 The detailed technical implementation (AST pass, `OWSEC` rule catalog, trust report,
 PoC spike) is described as a separate work plan in [`OWUI_SEC.md`](../../OWUI_SEC.md)
 and is deliberately kept out of this ADR.
+
+## Implementation status
+
+> This section records progress against the decision. The decision itself (above) is
+> unchanged; entries here are dated and additive.
+
+### 2026-06-09 — Phase 1 (PoC) done, decision validated
+
+The core engineering bet — a **scope-aware pass** that distinguishes import-time from
+method-body execution — was built and **validated against the abort criterion**: the
+structure-only scanner produced **0 false positives on the 33-file `examples/` corpus**
+(threshold ≤2) while detecting **3/3** hand-written import-time-execution fixtures.
+Shipped: the call-site/scope tracker (`analysis/`), the first security rule **`OWSEC001`
+— code execution at import time**, and an **opt-in `--security` profile (off by
+default)**. Full detail, decisions, and assumptions live in `OWUI_SEC.md` §3 "Phase 1 —
+Implementation record".
+
+Implications for the strategy in this ADR:
+
+- **The "scope-aware AST pass" risk in Consequences is, so far, retired for the
+  structure-only path.** The 0-FP measurement shows the existing scanner can carry the
+  scope distinction without a full parser — *for this rule*. Whether that holds across
+  the catalog is an **open engineering decision**: a timeboxed `rustpython-parser` spike
+  is scheduled *before* the rest of the catalog (Phase 2), so the engine choice is made
+  with data while migration is still cheap, not after eight rules accrete on the scanner.
+- **The "conservative defaults / opt-in `--security`" mandate is now concrete.** A single
+  boolean profile gates all `OWSEC` rules; existing users see no change. This satisfies
+  the "high-FP security rules are toxic" risk by construction.
+- **Scope-honesty held.** `OWSEC001` ships as presence + scope only (no taint), exactly
+  as the Consequences section requires; the data-flow ambition remains deferred.
+
+Two decisions this ADR deferred are now **open and explicitly owned by Phase 2** (see
+`OWUI_SEC.md`): the **severity taxonomy** (today's Error/Warning enum lacks the `Info`
+level several heuristic rules want — candidate model: `level × confidence ×
+default_enabled`) and an **inline suppression / baseline** mechanism (an adoption gate
+before the security rules go wide).
