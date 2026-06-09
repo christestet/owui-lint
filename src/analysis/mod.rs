@@ -9,9 +9,9 @@ use crate::models::{ClassInfo, FunctionInfo, ModuleInfo, NestedClassInfo, Syntax
 use crate::util::count_indent;
 
 use parsing::{
-    collect_function_signature, extract_module_docstring, is_docstring_line, is_function_start,
-    parse_class_definition, parse_function_definition, parse_import, parse_import_from,
-    parse_valve_fields, returns_body, self_assignment_name,
+    FunctionDef, collect_function_signature, extract_module_docstring, is_docstring_line,
+    is_function_start, parse_class_definition, parse_function_definition, parse_import,
+    parse_import_from, parse_valve_fields, returns_body, self_assignment_name,
 };
 use syntax::detect_syntax_error;
 
@@ -349,17 +349,9 @@ fn handle_function_definition(
     let column = indent + 1;
     if let Some(class_index) = direct_parent_class_index(contexts) {
         let is_init_method = definition.name == "__init__";
-        module.classes[class_index].methods.push(FunctionInfo {
-            name: definition.name,
-            line: line_no,
-            column,
-            args: definition.args,
-            decorators: Vec::new(),
-            is_async: definition.is_async,
-            has_docstring: false,
-            returns_annotation: definition.returns_annotation,
-            returns_body: false,
-        });
+        module.classes[class_index]
+            .methods
+            .push(function_info(definition, line_no, column));
         let method_index = module.classes[class_index].methods.len() - 1;
         contexts.push(Context::Function(FunctionContext {
             indent,
@@ -372,17 +364,9 @@ fn handle_function_definition(
             first_stmt_seen: false,
         }));
     } else if indent == 0 {
-        module.functions.push(FunctionInfo {
-            name: definition.name,
-            line: line_no,
-            column,
-            args: definition.args,
-            decorators: Vec::new(),
-            is_async: definition.is_async,
-            has_docstring: false,
-            returns_annotation: definition.returns_annotation,
-            returns_body: false,
-        });
+        module
+            .functions
+            .push(function_info(definition, line_no, column));
         let function_index = module.functions.len() - 1;
         contexts.push(Context::Function(FunctionContext {
             indent,
@@ -401,6 +385,20 @@ fn handle_function_definition(
         }));
     }
     consumed_lines
+}
+
+fn function_info(definition: FunctionDef, line: usize, column: usize) -> FunctionInfo {
+    FunctionInfo {
+        name: definition.name,
+        line,
+        column,
+        args: definition.args,
+        decorators: Vec::new(),
+        is_async: definition.is_async,
+        has_docstring: false,
+        returns_annotation: definition.returns_annotation,
+        returns_body: false,
+    }
 }
 
 fn direct_parent_class_index(contexts: &[Context]) -> Option<usize> {

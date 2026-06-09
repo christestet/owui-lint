@@ -5,7 +5,17 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::models::{Issue, LintSummary, Severity};
-use crate::rules::{all_rules, rule_doc};
+use crate::rules::{RuleDoc, all_rules, rule_doc};
+
+#[derive(Serialize)]
+struct JsonRule<'a> {
+    id: &'a str,
+    default_severity: Severity,
+    title: &'a str,
+    summary: &'a str,
+    remediation: &'a str,
+    help_url: &'a str,
+}
 
 pub fn format_text(issues: &[Issue], summary: &LintSummary, colorize: bool) -> String {
     let mut lines = Vec::with_capacity((issues.len() * 4) + 3);
@@ -75,16 +85,6 @@ pub fn format_json(issues: &[Issue], summary: &LintSummary) -> String {
         help_url: Option<&'a str>,
     }
 
-    #[derive(Serialize)]
-    struct JsonRule<'a> {
-        id: &'a str,
-        default_severity: Severity,
-        title: &'a str,
-        summary: &'a str,
-        remediation: &'a str,
-        help_url: &'a str,
-    }
-
     let unique_rules: BTreeSet<&str> = issues.iter().map(|issue| issue.rule_id).collect();
 
     let payload = json!({
@@ -92,14 +92,7 @@ pub fn format_json(issues: &[Issue], summary: &LintSummary) -> String {
         "rules": unique_rules
             .iter()
             .filter_map(|rule_id| rule_doc(rule_id))
-            .map(|rule| JsonRule {
-                id: rule.id,
-                default_severity: rule.default_severity,
-                title: rule.title,
-                summary: rule.summary,
-                remediation: rule.remediation,
-                help_url: rule.help_url,
-            })
+            .map(json_rule)
             .collect::<Vec<_>>(),
         "issues": issues
             .iter()
@@ -263,31 +256,25 @@ pub fn format_rule_list_text() -> String {
 }
 
 pub fn format_rule_list_json() -> String {
-    #[derive(Serialize)]
-    struct JsonRule<'a> {
-        id: &'a str,
-        default_severity: Severity,
-        title: &'a str,
-        summary: &'a str,
-        remediation: &'a str,
-        help_url: &'a str,
-    }
-
     let payload = json!({
         "rules": all_rules()
             .iter()
-            .map(|rule| JsonRule {
-                id: rule.id,
-                default_severity: rule.default_severity,
-                title: rule.title,
-                summary: rule.summary,
-                remediation: rule.remediation,
-                help_url: rule.help_url,
-            })
+            .map(json_rule)
             .collect::<Vec<_>>()
     });
 
     serde_json::to_string_pretty(&payload).expect("json formatting should succeed")
+}
+
+fn json_rule(rule: &RuleDoc) -> JsonRule<'_> {
+    JsonRule {
+        id: rule.id,
+        default_severity: rule.default_severity,
+        title: rule.title,
+        summary: rule.summary,
+        remediation: rule.remediation,
+        help_url: rule.help_url,
+    }
 }
 
 pub fn format_rule_explanation(rule_id: &str) -> Option<String> {
