@@ -37,6 +37,21 @@ Exit codes:
 - `1`: the `--fail-on` condition was met (errors found with `--fail-on error`; any findings with `--fail-on warning`)
 - `2`: usage, configuration, or runtime error (no targets given, no files matched, write failure)
 
+## Security Profile
+
+The `OWSEC` security rules are **off by default**. Turn them on for a run with the
+`--security` flag, or persist it with `security: true` in your config file:
+
+```bash
+owui-lint extensions/ --security
+owui-lint extensions/ --security --format sarif --output owui-lint.sarif
+```
+
+These rules flag reviewer/admin trust concerns — chiefly code that executes at *import
+time* (module or entry-class `__init__` scope), which Open WebUI runs the moment a
+plugin is loaded, before any tool call. See [Configuration](../configuration/#security-profile)
+for details and precedence.
+
 ## Rule Discovery
 
 ```bash

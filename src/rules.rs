@@ -26,6 +26,7 @@ const VALVES_DOC: &str =
 const VALVES_INPUT_TYPES_DOC: &str =
     "https://docs.openwebui.com/features/extensibility/plugin/development/valves#input-types";
 const PIPELINES_DOC: &str = "https://docs.openwebui.com/features/extensibility/pipelines/";
+const SECURITY_DOC: &str = "https://docs.openwebui.com/features/extensibility/plugin/";
 
 pub const OWUI001: &str = "OWUI001";
 pub const OWUI010: &str = "OWUI010";
@@ -53,6 +54,7 @@ pub const OWUI023: &str = "OWUI023";
 pub const OWUI030: &str = "OWUI030";
 pub const OWUI031: &str = "OWUI031";
 pub const OWUI032: &str = "OWUI032";
+pub const OWSEC001: &str = "OWSEC001";
 
 const RULES: &[RuleDoc] = &[
     RuleDoc {
@@ -287,6 +289,15 @@ const RULES: &[RuleDoc] = &[
         summary: "The module docstring header does not include a `title:` field, which Open WebUI uses as the display name in the UI.",
         remediation: "Add `title: My Extension Name` to the module docstring.",
         help_url: PLUGIN_OVERVIEW,
+        openwebui_version: "0.1.0",
+    },
+    RuleDoc {
+        id: OWSEC001,
+        default_severity: Severity::Error,
+        title: "Code execution at import time",
+        summary: "A dangerous call (subprocess/os.system/eval/exec/__import__ or an outbound network call) runs at module level or in an entry-class __init__. Open WebUI executes the module body via exec() and immediately instantiates the entry class when loading a plugin, so this code runs with full server privileges before any tool is called and without user consent. Security profile rule (opt-in via --security).",
+        remediation: "Move the call into a method that runs only when the tool/pipe/filter/action is invoked. Never run subprocess, eval/exec, or network/IO at module level or in __init__.",
+        help_url: SECURITY_DOC,
         openwebui_version: "0.1.0",
     },
 ];

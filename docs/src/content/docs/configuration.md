@@ -12,9 +12,11 @@ description: Configure file discovery and rule severity.
 
 The first file found is used; the rest are ignored. Pass `--config <PATH>` to force a specific file — if that path does not exist the command exits with code 2.
 
-> **Parser note:** `owui-lint` uses a lightweight, hand-rolled YAML subset. Only the keys documented here (`lint.include`, `lint.exclude`, and `rules.*`) are read. Full YAML features such as anchors, aliases, and nested maps are not supported.
+> **Parser note:** `owui-lint` uses a lightweight, hand-rolled YAML subset. Only the keys documented here (`security`, `lint.include`, `lint.exclude`, and `rules.*`) are read. Full YAML features such as anchors, aliases, and nested maps are not supported.
 
 ```yaml
+security: false # opt-in security profile (OWSEC rules); off by default
+
 lint:
   include:
     - "**/*.py"
@@ -60,3 +62,22 @@ rules:
 ```
 
 Unknown rule IDs in the config file are reported as warnings so configuration drift is visible without blocking the run. When this happens the CLI suggests running `owui-lint rules` to list the valid IDs.
+
+## Security Profile
+
+The security rule class (`OWSEC`) targets reviewer/admin concerns — chiefly code that runs at **import time**, before any tool is called, because Open WebUI `exec()`s a plugin's module body and immediately instantiates its entry class. These rules are **off by default** so existing runs are unaffected.
+
+Enable the profile in either of two ways:
+
+- Config: top-level `security: true` (accepts `true`/`yes`/`on`/`1`).
+- CLI: the `--security` flag, which turns the profile on for that run. The flag can only enable the profile; it never disables a config that already set `security: true`.
+
+```yaml
+security: true
+```
+
+```bash
+owui-lint extensions/ --security
+```
+
+When the profile is off, `OWSEC` rules never emit findings, even if referenced in `rules:` overrides. When on, their severities can still be tuned or disabled via `rules:` like any other rule.

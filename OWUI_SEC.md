@@ -197,6 +197,25 @@ owui-sources-check`), so the behavior we assume is the behavior OWUI implements.
 **Definition of Done Phase 1:** `OWSEC001` runs; malicious fixtures detected; FP count
 on `examples/` ≤ 2 and documented (file + line for each); `make docker-check` green.
 
+> **Phase 1 status: DONE (abort criterion passed).** The scope-aware call-site tracker
+> (`CallScope::{ModuleLevel,InitBody,MethodBody}` in `models.rs`, `extract_calls` in
+> `analysis/parsing.rs`, scope tagging in `analysis/mod.rs`) and `OWSEC001` ship behind
+> an opt-in security profile (`--security` / `security: true`, off by default — no FP
+> regression for existing users). Measurement:
+> - **Clean corpus** (`examples/**`, 33 files): **0 OWSEC001 findings** — well under the
+>   ≤2 threshold. Verified non-vacuous: the corpus contains many `requests.`/`httpx.`
+>   sink calls (e.g. `jira_agent.py` ×7, `n8n_chats.py` ×8) all correctly classified as
+>   `MethodBody` and suppressed; a sweep for indent-0 / bare-builtin sinks found none, so
+>   no false negatives are masked.
+> - **Malicious corpus** (`tests/fixtures/owsec/`): 3/3 detected — `module_level_subprocess.py:12`
+>   (ModuleLevel), `init_network.py:20` (InitBody), `valves_field_default_eval.py:15`
+>   (class-body field default → ModuleLevel). Negative fixture `clean_method_only.py` → 0.
+>
+> The indentation-based engine was sufficient; **`rustpython-parser` was not needed**.
+> Phase 2 is unblocked. Note: code guarded by `if __name__ == "__main__":` is currently
+> treated as `ModuleLevel` even though it does not run under `exec` as a module — a known
+> potential FP source, not observed in the corpus; add a guard if Phase 2 surfaces it.
+
 ### Phase 2 — `OWSEC` rule catalog
 
 Implement in `rules.rs` + `analysis/`, each with tests in `tests/rules_tests.rs`.

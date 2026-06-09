@@ -62,6 +62,43 @@ pub struct FunctionInfo {
     pub returns_body: bool,
 }
 
+/// Where a detected call site executes, ordered by how early it runs relative to a
+/// plugin's lifecycle. Open WebUI `exec()`s the module body and then immediately
+/// instantiates the entry class (`module.Tools()`/`Pipe()`/`Filter()`/`Action()` in
+/// `plugin.py`), so both `ModuleLevel` and `InitBody` run at *import time* — with no
+/// tool call and no user consent. `MethodBody` runs only when the method is invoked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CallScope {
+    /// Top-level statements and class-body / Pydantic field-default expressions. Runs
+    /// during `exec(content, module.__dict__)`.
+    ModuleLevel,
+    /// Inside an entry class `__init__`. Runs at import time transitively because OWUI
+    /// constructs the entry object right after `exec`.
+    InitBody,
+    /// Any other method body. Runs only when the method is called.
+    MethodBody,
+}
+
+impl CallScope {
+    /// Both module-level and entry-class `__init__` code execute when Open WebUI loads
+    /// the plugin, before any tool call.
+    pub fn is_import_time(self) -> bool {
+        matches!(self, Self::ModuleLevel | Self::InitBody)
+    }
+}
+
+/// A call expression detected by the structure-only scanner, tagged with the scope it
+/// sits in. `callee` is the dotted reference immediately before the `(` (for example
+/// `subprocess.run`, `eval`, `requests.get`). This is a textual detection: no argument
+/// or data-flow analysis is performed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallSite {
+    pub callee: String,
+    pub line: usize,
+    pub column: usize,
+    pub scope: CallScope,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValveFieldInfo {
     pub name: String,
@@ -111,6 +148,9 @@ pub struct ModuleInfo {
     pub imports: Vec<String>,
     pub functions: Vec<FunctionInfo>,
     pub classes: Vec<ClassInfo>,
+    /// Call sites detected anywhere in the module, tagged with execution scope. Drives
+    /// the scope-aware security (`OWSEC`) rules.
+    pub call_sites: Vec<CallSite>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -299,6 +299,7 @@ fn render_rules_block() -> Result<String> {
     grouped.insert("OWF", Vec::new());
     grouped.insert("OWA", Vec::new());
     grouped.insert("OWPL", Vec::new());
+    grouped.insert("OWSEC", Vec::new());
     grouped.insert("OTHER", Vec::new());
 
     for rule in payload.rules {
@@ -314,7 +315,7 @@ fn render_rules_block() -> Result<String> {
         String::new(),
     ];
 
-    let order = ["OWUI", "OWT", "OWP", "OWF", "OWA", "OWPL", "OTHER"];
+    let order = ["OWUI", "OWT", "OWP", "OWF", "OWA", "OWPL", "OWSEC", "OTHER"];
     for group in order {
         let rows = grouped
             .get(group)
@@ -350,11 +351,15 @@ fn group_label(group: &str) -> &'static str {
         "OWF" => "Filter (`OWF`)",
         "OWA" => "Action (`OWA`)",
         "OWPL" => "Pipeline (`OWPL`)",
+        "OWSEC" => "Security (`OWSEC`, opt-in via `--security`)",
         _ => "Other",
     }
 }
 
 fn group_for_rule(rule_id: &str) -> &str {
+    if rule_id.starts_with("OWSEC") {
+        return "OWSEC";
+    }
     if rule_id.starts_with("OWPL") {
         return "OWPL";
     }

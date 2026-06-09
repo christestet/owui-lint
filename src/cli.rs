@@ -74,6 +74,12 @@ struct LintArgs {
         help = "Exit behavior: none=always 0, error=non-zero on errors, warning=non-zero on any findings."
     )]
     fail_on: FailOn,
+
+    #[arg(
+        long,
+        help = "Enable the opt-in security profile (OWSEC rules) for import-time-execution and trust checks. Off by default."
+    )]
+    security: bool,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -181,13 +187,16 @@ fn run_lint(cli: LintArgs) -> i32 {
         return 2;
     }
 
-    let config = match load_config(cli.config.as_deref()) {
+    let mut config = match load_config(cli.config.as_deref()) {
         Ok(config) => config,
         Err(err) => {
             eprintln!("{err}");
             return 2;
         }
     };
+    // The `--security` flag turns the profile on; it never turns off a config that
+    // already enabled it.
+    config.security |= cli.security;
     let unknown_overrides = config
         .rule_overrides
         .keys()
