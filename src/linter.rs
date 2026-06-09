@@ -10,8 +10,8 @@ use crate::glob::glob_match;
 use crate::models::{ClassInfo, Issue, LintSummary, ModuleInfo, Severity, SeverityOverride};
 use crate::rules::{
     OWA400, OWA401, OWA402, OWF300, OWF301, OWF303, OWF304, OWP200, OWP201, OWP202, OWPL500,
-    OWPL501, OWT100, OWT101, OWT102, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021, OWUI022, OWUI023,
-    OWUI030, OWUI031, OWUI032, issue,
+    OWPL501, OWSEC001, OWT100, OWT101, OWT102, OWT103, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021,
+    OWUI022, OWUI023, OWUI030, OWUI031, OWUI032, issue,
 };
 
 const EXTENSION_CLASSES: [(&str, &str); 5] = [
@@ -73,7 +73,7 @@ pub fn lint_files(files: &[PathBuf], config: &Config) -> (Vec<Issue>, LintSummar
 
     for file_path in files {
         let module_info = analyze_file(file_path);
-        issues.extend(lint_module(&module_info));
+        issues.extend(lint_module(&module_info, config));
     }
 
     let filtered = finalize_issues(issues, config);
@@ -102,7 +102,7 @@ pub fn lint_files(files: &[PathBuf], config: &Config) -> (Vec<Issue>, LintSummar
 /// language server, which lints unsaved editor buffers without filesystem reads.
 pub fn lint_source(path: &Path, source: &str, config: &Config) -> Vec<Issue> {
     let module_info = analyze_source(path, source);
-    finalize_issues(lint_module(&module_info), config)
+    finalize_issues(lint_module(&module_info, config), config)
 }
 
 /// Apply rule-severity overrides and the canonical sort order shared by the CLI
@@ -133,7 +133,7 @@ fn apply_rule_overrides(mut issues: Vec<Issue>, config: &Config) -> Vec<Issue> {
     filtered
 }
 
-fn lint_module(module: &ModuleInfo) -> Vec<Issue> {
+fn lint_module(module: &ModuleInfo, config: &Config) -> Vec<Issue> {
     let mut issues = Vec::new();
 
     if !module.syntax_ok {
@@ -149,6 +149,13 @@ fn lint_module(module: &ModuleInfo) -> Vec<Issue> {
             format!("Basic Python scan failed: {message}"),
         ));
         return issues;
+    }
+
+    // Opt-in security profile (OWSEC). Runs regardless of extension-class structure so a
+    // malicious file is still flagged; gated off by default so existing users are
+    // unaffected.
+    if config.security {
+        issues.extend(lint_security(&module.path, module));
     }
 
     issues.extend(lint_module_header(&module.path, module));
@@ -424,6 +431,19 @@ fn lint_tools(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
                 format!("Tool method '{}' should be async.", method.name),
             ));
         }
+        if !method.untyped_args.is_empty() {
+            issues.push(issue(
+                OWT103,
+                path,
+                method.line,
+                method.column,
+                format!(
+                    "Tool method '{}' has parameter(s) without type hints: {}.",
+                    method.name,
+                    method.untyped_args.join(", ")
+                ),
+            ));
+        }
     }
 
     issues
@@ -601,6 +621,57 @@ fn lint_pipeline(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
     issues
 }
 
+/// OWSEC001 — code execution at import time. Flags dangerous calls (process/shell
+/// execution, dynamic code evaluation, dynamic import, or outbound network access) that
+/// run at module level or in an entry-class `__init__`, i.e. when Open WebUI loads the
+/// plugin via `exec()` + entry-class instantiation, before any tool call.
+fn lint_security(path: &Path, module: &ModuleInfo) -> Vec<Issue> {
+    let mut issues = Vec::new();
+
+    for call in &module.call_sites {
+        if !call.scope.is_import_time() {
+            continue;
+        }
+        let Some(category) = import_time_exec_category(&call.callee) else {
+            continue;
+        };
+        issues.push(issue(
+            OWSEC001,
+            path,
+            call.line,
+            call.column,
+            format!(
+                "{category} at import time: `{}` runs when Open WebUI loads this plugin \
+                 (module/__init__ scope), before any tool call and without user consent.",
+                call.callee
+            ),
+        ));
+    }
+
+    issues
+}
+
+/// Classify a callee as an import-time-execution sink, returning a human-readable
+/// category, or `None` if it is not a sink OWSEC001 cares about. Textual/structural only
+/// — no argument analysis (see OWUI_SEC.md §2.1).
+fn import_time_exec_category(callee: &str) -> Option<&'static str> {
+    let root = callee.split('.').next().unwrap_or(callee);
+
+    if callee == "subprocess" || root == "subprocess" {
+        return Some("Subprocess execution");
+    }
+    if matches!(callee, "os.system" | "os.popen" | "os.spawnl" | "os.spawnv") {
+        return Some("Shell execution");
+    }
+    if matches!(callee, "eval" | "exec" | "__import__" | "compile") {
+        return Some("Dynamic code execution");
+    }
+    if matches!(root, "requests" | "httpx" | "aiohttp" | "socket" | "urllib") {
+        return Some("Outbound network access");
+    }
+    None
+}
+
 fn has_version_specifier(req: &str) -> bool {
     ["==", ">=", "<=", "!=", "~=", ">", "<", "@"]
         .iter()
@@ -752,5 +823,31 @@ mod tests {
         let issues = lint_source(Path::new("/virtual/tools.py"), TOOLS_SOURCE, &config);
         assert!(issues.iter().all(|issue| issue.rule_id != "OWT102"));
         assert!(issues.iter().any(|issue| issue.rule_id == "OWT101"));
+    }
+
+    #[test]
+    fn owt103_fires_on_untyped_tool_param() {
+        // `query` has no type annotation.
+        let issues = lint_source(
+            Path::new("/virtual/tools.py"),
+            TOOLS_SOURCE,
+            &Config::default(),
+        );
+        assert!(issues.iter().any(|issue| issue.rule_id == "OWT103"));
+    }
+
+    #[test]
+    fn owt103_silent_when_params_are_typed() {
+        let source = "class Tools:\n    async def search(self, query: str) -> str:\n        \"\"\"Search.\"\"\"\n        return query\n";
+        let issues = lint_source(Path::new("/virtual/tools.py"), source, &Config::default());
+        assert!(issues.iter().all(|issue| issue.rule_id != "OWT103"));
+    }
+
+    #[test]
+    fn owt103_ignores_self_and_reserved_dunder_args() {
+        // Only untyped params are `self` and the reserved `__user__` / `__event_emitter__`.
+        let source = "class Tools:\n    async def search(self, query: str, __user__, __event_emitter__) -> str:\n        \"\"\"Search.\"\"\"\n        return query\n";
+        let issues = lint_source(Path::new("/virtual/tools.py"), source, &Config::default());
+        assert!(issues.iter().all(|issue| issue.rule_id != "OWT103"));
     }
 }

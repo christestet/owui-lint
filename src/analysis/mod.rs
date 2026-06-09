@@ -5,13 +5,15 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
-use crate::models::{ClassInfo, FunctionInfo, ModuleInfo, NestedClassInfo, SyntaxErrorInfo};
+use crate::models::{
+    CallScope, CallSite, ClassInfo, FunctionInfo, ModuleInfo, NestedClassInfo, SyntaxErrorInfo,
+};
 use crate::util::count_indent;
 
 use parsing::{
-    FunctionDef, collect_function_signature, extract_module_docstring, is_docstring_line,
-    is_function_start, parse_class_definition, parse_function_definition, parse_import,
-    parse_import_from, parse_valve_fields, returns_body, self_assignment_name,
+    FunctionDef, collect_function_signature, extract_calls, extract_module_docstring,
+    is_docstring_line, is_function_start, parse_class_definition, parse_function_definition,
+    parse_import, parse_import_from, parse_valve_fields, returns_body, self_assignment_name,
 };
 use syntax::detect_syntax_error;
 
@@ -100,25 +102,35 @@ fn update_multiline_state(raw_line: &str, in_multiline: &mut Option<&'static str
     }
 }
 
+/// Build a `ModuleInfo` carrying only a syntax/read error. Shared by the read-failure
+/// and syntax-error paths so the empty-field set stays defined in one place.
+fn error_module(path: &Path, error: SyntaxErrorInfo) -> ModuleInfo {
+    ModuleInfo {
+        path: path.to_path_buf(),
+        syntax_ok: false,
+        syntax_error: Some(error),
+        module_docstring: None,
+        module_docstring_line: None,
+        imports: Vec::new(),
+        functions: Vec::new(),
+        classes: Vec::new(),
+        call_sites: Vec::new(),
+    }
+}
+
 pub fn analyze_file(path: &Path) -> ModuleInfo {
     let source = match fs::read_to_string(path) {
         Ok(source) => source,
         Err(err) => {
-            return ModuleInfo {
-                path: path.to_path_buf(),
-                syntax_ok: false,
-                syntax_error: Some(SyntaxErrorInfo {
+            return error_module(
+                path,
+                SyntaxErrorInfo {
                     message: format!("Unable to read file: {err}"),
                     line: 1,
                     column: 1,
                     text: None,
-                }),
-                module_docstring: None,
-                module_docstring_line: None,
-                imports: Vec::new(),
-                functions: Vec::new(),
-                classes: Vec::new(),
-            };
+                },
+            );
         }
     };
 
@@ -131,16 +143,7 @@ pub fn analyze_file(path: &Path) -> ModuleInfo {
 pub fn analyze_source(path: &Path, source: &str) -> ModuleInfo {
     let syntax_error = detect_syntax_error(source);
     if let Some(error) = syntax_error {
-        return ModuleInfo {
-            path: path.to_path_buf(),
-            syntax_ok: false,
-            syntax_error: Some(error),
-            module_docstring: None,
-            module_docstring_line: None,
-            imports: Vec::new(),
-            functions: Vec::new(),
-            classes: Vec::new(),
-        };
+        return error_module(path, error);
     }
 
     parse_module(path, source)
@@ -161,6 +164,7 @@ fn parse_module(path: &Path, source: &str) -> ModuleInfo {
         imports: Vec::new(),
         functions: Vec::new(),
         classes: Vec::new(),
+        call_sites: Vec::new(),
     };
 
     let mut contexts: Vec<Context> = Vec::new();
@@ -260,6 +264,17 @@ fn parse_module(path: &Path, source: &str) -> ModuleInfo {
             );
             line_idx += consumed;
             continue;
+        }
+
+        // Regular statement line: record any call sites with their execution scope.
+        let scope = current_call_scope(&contexts, &module.classes);
+        for call in extract_calls(raw_line) {
+            module.call_sites.push(CallSite {
+                callee: call.callee,
+                line: line_no,
+                column: call.column,
+                scope,
+            });
         }
 
         line_idx += 1;
@@ -393,6 +408,7 @@ fn function_info(definition: FunctionDef, line: usize, column: usize) -> Functio
         line,
         column,
         args: definition.args,
+        untyped_args: definition.untyped_args,
         decorators: Vec::new(),
         is_async: definition.is_async,
         has_docstring: false,
@@ -426,6 +442,37 @@ fn current_top_level_class_index(contexts: &[Context]) -> Option<usize> {
     None
 }
 
+/// The five class conventions Open WebUI instantiates immediately after `exec` (the
+/// backend entry classes plus the Pipelines `Pipeline`). An `__init__` body runs at
+/// import time only for these — a helper class's `__init__` runs only if it is
+/// constructed, so it must not be treated as import-time.
+const ENTRY_CLASS_NAMES: [&str; 5] = ["Tools", "Pipe", "Filter", "Action", "Pipeline"];
+
+fn is_entry_class_name(name: &str) -> bool {
+    ENTRY_CLASS_NAMES.contains(&name)
+}
+
+/// Determine the execution scope of a statement from the current context stack.
+///
+/// - Innermost context is an entry-class `__init__` → [`CallScope::InitBody`].
+/// - Innermost context is any other function body → [`CallScope::MethodBody`].
+/// - Otherwise (module top level or class body, including Pydantic field defaults) →
+///   [`CallScope::ModuleLevel`].
+fn current_call_scope(contexts: &[Context], classes: &[ClassInfo]) -> CallScope {
+    match contexts.last() {
+        Some(Context::Function(function_ctx)) => {
+            if function_ctx.is_init_method
+                && let Some(class_index) = function_ctx.class_index
+                && is_entry_class_name(&classes[class_index].name)
+            {
+                return CallScope::InitBody;
+            }
+            CallScope::MethodBody
+        }
+        _ => CallScope::ModuleLevel,
+    }
+}
+
 fn set_function_docstring(module: &mut ModuleInfo, target: &FunctionTarget, trimmed: &str) {
     let has_docstring = is_docstring_line(trimmed);
     match target {
@@ -456,7 +503,54 @@ fn set_function_returns_body(module: &mut ModuleInfo, target: &FunctionTarget, t
 mod tests {
     use std::fs;
 
-    use super::analyze_file;
+    use super::{analyze_file, analyze_source};
+    use crate::models::CallScope;
+
+    fn scope_of(source: &str, callee: &str) -> CallScope {
+        let module = analyze_source(std::path::Path::new("/virtual/x.py"), source);
+        module
+            .call_sites
+            .iter()
+            .find(|c| c.callee == callee)
+            .unwrap_or_else(|| panic!("call to `{callee}` not detected in:\n{source}"))
+            .scope
+    }
+
+    #[test]
+    fn module_level_call_is_import_time() {
+        let source = "import subprocess\nsubprocess.run([\"id\"])\n";
+        assert_eq!(scope_of(source, "subprocess.run"), CallScope::ModuleLevel);
+    }
+
+    #[test]
+    fn class_body_field_default_is_module_level() {
+        // Pydantic field defaults execute during `exec` (class definition time).
+        let source = "class Tools:\n    class Valves(BaseModel):\n        x: str = os.popen(\"id\").read()\n";
+        assert_eq!(scope_of(source, "os.popen"), CallScope::ModuleLevel);
+    }
+
+    #[test]
+    fn entry_class_init_is_import_time() {
+        let source =
+            "class Tools:\n    def __init__(self):\n        eval(self.payload)\n        return\n";
+        assert_eq!(scope_of(source, "eval"), CallScope::InitBody);
+    }
+
+    #[test]
+    fn method_body_call_is_not_import_time() {
+        let source = "class Tools:\n    async def search(self, q: str) -> str:\n        return subprocess.run([q])\n";
+        let scope = scope_of(source, "subprocess.run");
+        assert_eq!(scope, CallScope::MethodBody);
+        assert!(!scope.is_import_time());
+    }
+
+    #[test]
+    fn helper_class_init_is_not_import_time() {
+        // A non-entry class `__init__` runs only when constructed, so its calls must be
+        // MethodBody, not InitBody.
+        let source = "class Helper:\n    def __init__(self):\n        subprocess.run([\"id\"])\n        return\n";
+        assert_eq!(scope_of(source, "subprocess.run"), CallScope::MethodBody);
+    }
 
     #[test]
     fn syntax_error_is_detected() {

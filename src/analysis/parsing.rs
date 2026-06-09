@@ -4,6 +4,9 @@ use crate::util::strip_inline_comment;
 pub(super) struct FunctionDef {
     pub(super) name: String,
     pub(super) args: Vec<String>,
+    /// Names of parameters that carry no type annotation, excluding `self`/`cls`,
+    /// `*args`/`**kwargs`, and Open WebUI reserved dunder args (`__user__`, …).
+    pub(super) untyped_args: Vec<String>,
     pub(super) is_async: bool,
     pub(super) returns_annotation: bool,
 }
@@ -104,7 +107,7 @@ pub(super) fn parse_function_definition(trimmed: &str) -> Option<FunctionDef> {
     }
 
     let args_raw = &payload[open_paren + 1..closing_paren];
-    let args = parse_args(args_raw);
+    let (args, untyped_args) = parse_args(args_raw);
 
     let tail = payload[closing_paren + 1..].trim();
     let returns_annotation = tail.starts_with("->");
@@ -112,31 +115,135 @@ pub(super) fn parse_function_definition(trimmed: &str) -> Option<FunctionDef> {
     Some(FunctionDef {
         name: name.to_string(),
         args,
+        untyped_args,
         is_async,
         returns_annotation,
     })
 }
 
-fn parse_args(raw: &str) -> Vec<String> {
+/// Returns `(all_arg_names, untyped_arg_names)`. The untyped list excludes `self`/`cls`,
+/// `*args`/`**kwargs`, and Open WebUI reserved dunder args (`__user__`, `__event_emitter__`,
+/// …) since those are not part of the model-facing tool schema.
+fn parse_args(raw: &str) -> (Vec<String>, Vec<String>) {
     let mut args = Vec::new();
+    let mut untyped_args = Vec::new();
     for part in raw.split(',') {
         let token = part.trim();
         if token.is_empty() {
             continue;
         }
         let without_default = token.split('=').next().unwrap_or(token).trim();
+        let has_annotation = without_default.contains(':');
         let without_type = without_default
             .split(':')
             .next()
             .unwrap_or(without_default)
             .trim();
+        let is_vararg = without_type.starts_with('*');
         let normalized = without_type.trim_start_matches('*').trim();
-        if is_valid_identifier(normalized) {
-            args.push(normalized.to_string());
+        if !is_valid_identifier(normalized) {
+            continue;
+        }
+        args.push(normalized.to_string());
+
+        if has_annotation || is_vararg || is_schema_excluded_param(normalized) {
+            continue;
+        }
+        untyped_args.push(normalized.to_string());
+    }
+
+    (args, untyped_args)
+}
+
+/// Parameters that never appear in the model-facing JSON schema and therefore do not
+/// require type hints: the instance/class receiver and Open WebUI reserved dunder args.
+fn is_schema_excluded_param(name: &str) -> bool {
+    name == "self" || name == "cls" || (name.starts_with("__") && name.ends_with("__"))
+}
+
+/// A call expression found on a single logical source line: the dotted callee name and
+/// the 1-based column where it starts.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct CallMatch {
+    pub(super) callee: String,
+    pub(super) column: usize,
+}
+
+/// Extract call expressions from a code line using string/comment-aware scanning.
+///
+/// This is deliberately textual and structure-only: for every `(` that is not inside a
+/// string or comment, the immediately preceding dotted identifier (for example
+/// `subprocess.run` in `subprocess.run(...)`) is recorded. A space between the name and
+/// the `(` breaks the match — acceptable for a heuristic detector. No argument or
+/// data-flow analysis is performed.
+pub(super) fn extract_calls(code: &str) -> Vec<CallMatch> {
+    let mut calls = Vec::new();
+    let mut word = String::new();
+    let mut word_start = 0_usize; // 0-based byte offset
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for (offset, ch) in code.char_indices() {
+        if in_single || in_double {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if (in_single && ch == '\'') || (in_double && ch == '"') {
+                in_single = false;
+                in_double = false;
+            }
+            word.clear();
+            continue;
+        }
+
+        match ch {
+            '#' => break,
+            '\'' => {
+                in_single = true;
+                word.clear();
+            }
+            '"' => {
+                in_double = true;
+                word.clear();
+            }
+            '(' => {
+                if let Some(callee) = normalize_callee(&word) {
+                    let lead = word.len() - callee.len();
+                    calls.push(CallMatch {
+                        callee,
+                        column: word_start + lead + 1,
+                    });
+                }
+                word.clear();
+            }
+            c if c.is_ascii_alphanumeric() || c == '_' || c == '.' => {
+                if word.is_empty() {
+                    word_start = offset;
+                }
+                word.push(c);
+            }
+            _ => word.clear(),
         }
     }
 
-    args
+    calls
+}
+
+/// Reduce a raw dotted token to a callee name suitable for sink matching: strip leading
+/// dots (left over from method chains such as `).run`), reject trailing-dot or numeric
+/// tokens, and require the first segment to look like an identifier.
+fn normalize_callee(word: &str) -> Option<String> {
+    let trimmed = word.trim_start_matches('.');
+    if trimmed.is_empty() || trimmed.ends_with('.') {
+        return None;
+    }
+    let first = trimmed.chars().next()?;
+    if !(first == '_' || first.is_ascii_alphabetic()) {
+        return None;
+    }
+    Some(trimmed.to_string())
 }
 
 pub(super) fn parse_class_definition(trimmed: &str) -> Option<(String, Vec<String>)> {
@@ -477,8 +584,45 @@ pub(super) fn parse_valve_fields(lines: &[&str], class_line_idx: usize) -> Vec<V
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_function_signature, extract_module_docstring, parse_valve_fields, returns_body,
+        collect_function_signature, extract_calls, extract_module_docstring, parse_valve_fields,
+        returns_body,
     };
+
+    fn callees(code: &str) -> Vec<String> {
+        extract_calls(code).into_iter().map(|c| c.callee).collect()
+    }
+
+    #[test]
+    fn extract_calls_finds_dotted_callee_and_column() {
+        let calls = extract_calls("    result = subprocess.run(cmd)");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].callee, "subprocess.run");
+        // 1-based column of the `s` in `subprocess`.
+        assert_eq!(calls[0].column, 14);
+    }
+
+    #[test]
+    fn extract_calls_records_bare_builtins() {
+        assert_eq!(callees("eval(payload)"), vec!["eval"]);
+        assert_eq!(callees("__import__('os')"), vec!["__import__"]);
+    }
+
+    #[test]
+    fn extract_calls_ignores_calls_inside_strings_and_comments() {
+        assert!(callees("note = \"subprocess.run(x)\"").is_empty());
+        assert!(callees("x = 1  # eval(danger)").is_empty());
+    }
+
+    #[test]
+    fn extract_calls_strips_method_chain_leading_dot() {
+        // `self.exec(` must read as `self.exec`, not the bare builtin `exec`.
+        assert_eq!(callees("self.exec(stmt)"), vec!["self.exec"]);
+        // A chained call after `)` yields just the trailing segment.
+        assert_eq!(
+            callees("get_client().query(x)"),
+            vec!["get_client", "query"]
+        );
+    }
 
     #[test]
     fn collect_function_signature_ignores_inline_comments_across_lines() {

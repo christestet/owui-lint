@@ -14,6 +14,10 @@ pub struct Config {
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub rule_overrides: BTreeMap<String, SeverityOverride>,
+    /// When false (the default) the opt-in security profile (`OWSEC` rules) stays off so
+    /// existing users see no behavior change. Enabled via top-level `security: true` in
+    /// the config file or the `--security` CLI flag.
+    pub security: bool,
 }
 
 impl Default for Config {
@@ -25,6 +29,7 @@ impl Default for Config {
                 .map(|value| value.to_string())
                 .collect(),
             rule_overrides: BTreeMap::new(),
+            security: false,
         }
     }
 }
@@ -110,6 +115,11 @@ fn parse_yaml_config(input: &str) -> std::result::Result<Config, String> {
             lint_list_key.clear();
             if let Some(section) = line.strip_suffix(':') {
                 current_section = section.trim().to_string();
+            } else if let Some((key, value)) = split_key_value(line)
+                && key.trim().eq_ignore_ascii_case("security")
+            {
+                current_section.clear();
+                config.security = parse_bool(unquote(value.trim()));
             }
             continue;
         }
@@ -162,6 +172,13 @@ fn parse_yaml_config(input: &str) -> std::result::Result<Config, String> {
 fn split_key_value(line: &str) -> Option<(&str, &str)> {
     let (key, value) = line.split_once(':')?;
     Some((key, value))
+}
+
+fn parse_bool(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "true" | "yes" | "on" | "1"
+    )
 }
 
 fn unquote(value: &str) -> &str {

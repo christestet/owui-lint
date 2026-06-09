@@ -51,22 +51,40 @@ Sources:
 ### 2. The loading mechanism proves import-time execution technically
 
 In the backend original (`backend/open_webui/utils/plugin.py`,
-`load_function_module_by_id` / `load_tool_module_by_id`):
+`load_function_module_by_id` / `load_tool_module_by_id`), two steps run back-to-back:
 
 ```python
-exec(content, module.__dict__)
+exec(content, module.__dict__)        # 1. runs the entire file body
+...
+return module.Tools(), frontmatter    # 2. immediately INSTANTIATES the class
+# (likewise module.Pipe() / module.Filter() / module.Action())
 ```
 
-The **entire file body** runs at load time. As a result, code at module level and in
-`__init__`/Valves constructors runs **immediately on import** — no tool call, no user
-consent. This makes "network call at import time" or "`subprocess` in the class body"
-a qualitatively sharper threat than the same code in a method body. Crucially, this
-scope distinction (module/init level vs. method body) is **not** something generic
-Python linters (Bandit/Ruff) assess in the OWUI context.
+Two distinct import-time execution paths follow, and the distinction matters for how
+we assign scope severity:
 
-Source: local reference copy `.agents/openwebui-extensions/references/plugin.py`
-(lines ~199–290), original:
-<https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/utils/plugin.py>
+1. **Module body + class-body / Pydantic field defaults** run in step 1 (`exec`).
+   `x: str = subprocess.run(...)` as a Valves field default executes here — at class
+   *definition* time, i.e. import time.
+2. **`__init__` bodies** run in step 2 — but **only because OWUI itself constructs the
+   object** (`module.Tools()`). `exec` alone does *not* run `__init__`; the
+   instantiation does. This is the precise, verifiable reason `__init__` (and any
+   `self.Valves()` it calls) is import-time.
+
+Either way: code at module/init scope runs **with no tool call and no user consent**,
+making "network call at import time" or "`subprocess` in the class body" a
+qualitatively sharper threat than the same code in a method body. This scope
+distinction is **not** something generic linters (Bandit/Ruff) assess in the OWUI
+context.
+
+> **Evidence is pinned by symbol, not line number.** The bundled reference copy of
+> `plugin.py` already drifted from upstream `main` (same code, different lines), so
+> citing line ranges would encode a falsehood. `scripts/sync-owui-sources.sh` pulls the
+> current upstream source/docs with provenance (`SOURCES.md`), and `make
+> owui-sources-check` alarms on drift so claims are re-verified against the real
+> implementation rather than a frozen snapshot.
+
+Source: <https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/utils/plugin.py>
 
 ### 3. `requirements` frontmatter → `pip install` (supply-chain vector)
 
@@ -158,6 +176,10 @@ opinionated.
   bet.
 - Security rules with a high false-positive rate are toxic (the tool gets turned off).
   Conservative defaults and an opt-in `--security` profile are mandatory.
+- The scanner is structure-only (no data-flow/taint). Detections that need "value X
+  reaches sink Y" — env→external-call exfiltration, "write outside the data dir",
+  proving an arg is dynamic — are **rescoped to a presence+scope core**, not promised.
+  The full data-flow version is deferred (see `OWUI_SEC.md` §2.1, §4).
 - Version/compatibility knowledge goes stale without maintenance and then becomes
   *wrong*.
 
@@ -171,3 +193,39 @@ opinionated.
 The detailed technical implementation (AST pass, `OWSEC` rule catalog, trust report,
 PoC spike) is described as a separate work plan in [`OWUI_SEC.md`](../../OWUI_SEC.md)
 and is deliberately kept out of this ADR.
+
+## Implementation status
+
+> This section records progress against the decision. The decision itself (above) is
+> unchanged; entries here are dated and additive.
+
+### 2026-06-09 — Phase 1 (PoC) done, decision validated
+
+The core engineering bet — a **scope-aware pass** that distinguishes import-time from
+method-body execution — was built and **validated against the abort criterion**: the
+structure-only scanner produced **0 false positives on the 33-file `examples/` corpus**
+(threshold ≤2) while detecting **3/3** hand-written import-time-execution fixtures.
+Shipped: the call-site/scope tracker (`analysis/`), the first security rule **`OWSEC001`
+— code execution at import time**, and an **opt-in `--security` profile (off by
+default)**. Full detail, decisions, and assumptions live in `OWUI_SEC.md` §3 "Phase 1 —
+Implementation record".
+
+Implications for the strategy in this ADR:
+
+- **The "scope-aware AST pass" risk in Consequences is, so far, retired for the
+  structure-only path.** The 0-FP measurement shows the existing scanner can carry the
+  scope distinction without a full parser — *for this rule*. Whether that holds across
+  the catalog is an **open engineering decision**: a timeboxed `rustpython-parser` spike
+  is scheduled *before* the rest of the catalog (Phase 2), so the engine choice is made
+  with data while migration is still cheap, not after eight rules accrete on the scanner.
+- **The "conservative defaults / opt-in `--security`" mandate is now concrete.** A single
+  boolean profile gates all `OWSEC` rules; existing users see no change. This satisfies
+  the "high-FP security rules are toxic" risk by construction.
+- **Scope-honesty held.** `OWSEC001` ships as presence + scope only (no taint), exactly
+  as the Consequences section requires; the data-flow ambition remains deferred.
+
+Two decisions this ADR deferred are now **open and explicitly owned by Phase 2** (see
+`OWUI_SEC.md`): the **severity taxonomy** (today's Error/Warning enum lacks the `Info`
+level several heuristic rules want — candidate model: `level × confidence ×
+default_enabled`) and an **inline suppression / baseline** mechanism (an adoption gate
+before the security rules go wide).
