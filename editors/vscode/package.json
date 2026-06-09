@@ -64,6 +64,14 @@
       {
         "command": "owui-lint.showOutput",
         "title": "owui-lint: Show Output"
+      },
+      {
+        "command": "owui-lint.checkForUpdates",
+        "title": "owui-lint: Check for Updates"
+      },
+      {
+        "command": "owui-lint.updateCli",
+        "title": "owui-lint: Update CLI"
       }
     ],
     "configuration": {
