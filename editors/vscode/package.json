@@ -2,7 +2,7 @@
   "name": "owui-lint",
   "displayName": "owui-lint",
   "description": "Live Open WebUI extension linting (Tools, Pipe, Filter, Action, Pipeline) powered by owui-lint.",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "publisher": "owui-lint",
   "license": "MIT",
   "icon": "icon.png",
