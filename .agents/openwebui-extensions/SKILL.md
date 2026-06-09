@@ -21,7 +21,6 @@ Before writing any code, read the appropriate reference file:
 | Pipeline | `references/pipelines.md` | User needs external server processing |
 | Valves & UserValves | `references/valves.md` | Defining configurable settings (admin Valves, per-user UserValves, input types, dynamic options) |
 | Valves, Events & Reserved Args | `references/development-common.md` | Always read — covers Valves, Events, Reserved Args, Rich UI |
-| Pitfalls & Troubleshooting | `references/pitfalls-and-troubleshooting.md` | Always read — covers common mistakes, debugging, model compatibility |
 
 ### Source Code References (Open WebUI Backend + Pipelines)
 
@@ -44,7 +43,7 @@ These are actual Python source files from the Open WebUI codebase. Read them whe
 | `references/actions.py` | Action execution (`chat_action`), sub-action routing, event emitter/call setup | Understanding how `action()` is invoked, which reserved args are passed, Rich UI embed processing |
 | `references/pipelines-main.py` | **Pipelines** loader (`open-webui/pipelines`, a separate repo): `load_module_from_path` via `importlib` `exec_module()` then `module.Pipeline()`, valves.json handling, lifecycle (`on_startup`/`on_shutdown`/`inlet`/`outlet`/`pipe`) | Understanding how Pipeline servers load and run — a different mechanism than the backend `plugin.py`, with a `Pipeline` class instead of `Tools`/`Pipe`/`Filter`/`Action` |
 
-**ALWAYS read `references/development-common.md` AND `references/pitfalls-and-troubleshooting.md` in addition to the type-specific reference.** The common reference contains critical information about Valves, Events, Reserved Args, and Rich UI. The pitfalls reference covers the most frequently encountered issues (wrong class names, silent failures, streaming hangs, tool calling problems) and their solutions — reading it before coding prevents most debugging sessions.
+**ALWAYS read `references/development-common.md` in addition to the type-specific reference.** The common reference contains critical information about Valves, Events, Reserved Args, and Rich UI.
 
 #### Official Documentation & Source URLs
 
@@ -79,8 +78,6 @@ If the local reference files lack detail for an edge case, or if you need to ver
 | Troubleshooting | https://docs.openwebui.com/troubleshooting/ |
 
 ### Implementation Principles
-
-Before writing code, ALWAYS review `references/pitfalls-and-troubleshooting.md`. It covers the most frequently encountered issues and reading it upfront prevents most debugging sessions. 
 
 Follow these core implementation principles:
 
