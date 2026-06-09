@@ -69,6 +69,21 @@
     "configuration": {
       "title": "owui-lint",
       "properties": {
+        "owui-lint.enable": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Enable or disable owui-lint for Python files. Can be set per workspace folder."
+        },
+        "owui-lint.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "markdownDescription": "Additional arguments passed to `owui-lint server`, e.g. `[\"--config\", \"/path/to/config.yml\"]`."
+        },
         "owui-lint.path": {
           "type": "string",
           "default": "owui-lint",

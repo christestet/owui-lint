@@ -15,7 +15,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       client?.outputChannel.show();
     }),
     vscode.workspace.onDidChangeConfiguration(async (event) => {
-      if (event.affectsConfiguration("owui-lint.path")) {
+      if (event.affectsConfiguration("owui-lint.enable")) {
+        if (isEnabled()) {
+          await start();
+        } else {
+          const current = client;
+          client = undefined;
+          await current?.dispose();
+        }
+        return;
+      }
+
+      if (
+        event.affectsConfiguration("owui-lint.path") ||
+        event.affectsConfiguration("owui-lint.extraArgs")
+      ) {
         await restart();
       }
     }),
@@ -35,10 +49,11 @@ export async function deactivate(): Promise<void> {
 function createClient(): LanguageClient {
   const config = vscode.workspace.getConfiguration("owui-lint");
   const command = resolveExecutablePath(config.get<string>("path", "owui-lint"));
+  const extraArgs = config.get<string[]>("extraArgs", []);
 
   const serverOptions: ServerOptions = {
-    run: { command, args: ["server"] },
-    debug: { command, args: ["server"] },
+    run: { command, args: ["server", ...extraArgs] },
+    debug: { command, args: ["server", ...extraArgs] },
   };
 
   const clientOptions: LanguageClientOptions = {
@@ -48,7 +63,17 @@ function createClient(): LanguageClient {
   return new LanguageClient("owui-lint", "owui-lint", serverOptions, clientOptions);
 }
 
+function isEnabled(): boolean {
+  return vscode.workspace
+    .getConfiguration("owui-lint")
+    .get<boolean>("enable", true);
+}
+
 async function start(): Promise<void> {
+  if (!isEnabled()) {
+    return;
+  }
+
   const next = createClient();
   client = next;
 
