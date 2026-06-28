@@ -10,7 +10,7 @@
     "preview": "astro preview"
   },
   "dependencies": {
-    "@astrojs/starlight": "0.39.3",
+    "@astrojs/starlight": "0.41.1",
     "astro": "6.4.4",
     "typescript": "6.0.3"
   }
