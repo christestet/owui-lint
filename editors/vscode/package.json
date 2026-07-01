@@ -35,7 +35,7 @@
   "pricing": "Free",
   "qna": "https://github.com/christestet/owui-lint/issues",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.125.0"
   },
   "categories": [
     "Linters",
@@ -124,10 +124,10 @@
     "vscode-languageclient": "^10.0.0"
   },
   "devDependencies": {
-    "@types/node": "^25.9.2",
-    "@types/vscode": "^1.85.0",
+    "@types/node": "^26.0.0",
+    "@types/vscode": "^1.125.0",
     "@vscode/vsce": "^3.9.2",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.1",
     "typescript": "^6.0.3"
   }
 }
