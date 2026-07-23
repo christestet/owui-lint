@@ -53,11 +53,13 @@ mappings=(
   "tools.py|$owui_main/backend/open_webui/utils/tools.py"
   "filter.py|$owui_main/backend/open_webui/utils/filter.py"
   "actions.py|$owui_main/backend/open_webui/utils/actions.py"
+  "events.py|$owui_main/backend/open_webui/events.py"
   "pipelines-main.py|$pipelines_main/main.py"
   # docs (raw upstream, ground truth for citations)
   "plugin-overview.mdx|$docs_main/docs/features/extensibility/plugin/index.mdx"
   "tools-development.mdx|$docs_main/docs/features/extensibility/plugin/tools/development.mdx"
   "events.mdx|$docs_main/docs/features/extensibility/plugin/development/events.mdx"
+  "event-function.mdx|$docs_main/docs/features/extensibility/plugin/functions/event.mdx"
   "valves.mdx|$docs_main/docs/features/extensibility/plugin/development/valves.mdx"
 )
 

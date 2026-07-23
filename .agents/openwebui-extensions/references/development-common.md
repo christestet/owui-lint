@@ -1,6 +1,6 @@
 # Development Common: Valves, Events, Reserved Args, Rich UI
 
-This reference covers shared concepts that apply to ALL Open WebUI extension types (Tools, Pipes, Filters, Actions, Pipelines).
+This reference covers shared concepts that apply to Tools, Pipes, Filters, Actions, and Pipelines. **Event Functions are the exception** — they don't receive chat-request reserved args (`__user__`, `__event_emitter__`, etc.) or `__event_emitter__`/`__event_call__` UI events at all; they get a different reserved-arg set built around the system event that triggered them. See [`references/event-functions.md`](event-functions.md) instead.
 
 ---
 
@@ -24,7 +24,7 @@ This reference covers shared concepts that apply to ALL Open WebUI extension typ
 
 Open WebUI injects special arguments into your functions. Add them as parameters to receive them automatically.
 
-### Available in ALL extension types
+### Available in Tools, Pipes, Filters, and Actions
 
 | Argument | Type | Description |
 |---|---|---|
@@ -33,6 +33,12 @@ Open WebUI injects special arguments into your functions. Add them as parameters
 | `__request__` | `Request` | FastAPI Request object (for internal API calls) |
 | `__event_emitter__` | `Callable` | Function to emit events back to the UI (status updates, citations, etc.) |
 | `__event_call__` | `Callable` | Function to call events and await responses |
+
+> **Event Functions do not get this set.** Their `event()` handler receives a
+> different reserved-arg set (`event`, `__id__`, `__event__`, `__event_id__`,
+> `__event_name__`, `__app__`, `__request__`) built around the system event that
+> triggered dispatch — there is no `__user__`, `__metadata__`, `__event_emitter__`, or
+> `__event_call__`. See [`references/event-functions.md`](event-functions.md).
 
 ### Usage Example
 

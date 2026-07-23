@@ -114,7 +114,7 @@ enum Commands {
 #[command(
     name = "owui-lint",
     version,
-    about = "Lint Open WebUI extensions (Tools, Pipe, Filter, Action, Pipeline).",
+    about = "Lint Open WebUI extensions (Tools, Pipe, Filter, Action, Pipeline, Event).",
     long_about = "owui-lint validates Open WebUI extension files and reports actionable issues.\n\nUse positional targets directly for linting, or use subcommands for rule discovery.",
     after_help = "Examples:\n  owui-lint extensions/\n  owui-lint lint extensions/ --format json --output lint-report.json\n  owui-lint rules\n  owui-lint explain OWT101"
 )]

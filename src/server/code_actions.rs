@@ -70,7 +70,7 @@ fn fix_for_rule(
     let line_idx = diagnostic.range.start.line as usize;
     match rule_id {
         // Make a handler async by inserting `async ` before `def`.
-        "OWT102" | "OWP202" | "OWA401" => async_fix(uri, lines, diagnostic, line_idx),
+        "OWT102" | "OWP202" | "OWA401" | "OWE601" => async_fix(uri, lines, diagnostic, line_idx),
         // Insert a docstring stub as the first statement of the method body.
         "OWT101" => docstring_fix(uri, lines, diagnostic, line_idx),
         // Add a missing module-header field inside the module docstring.

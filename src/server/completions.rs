@@ -145,6 +145,11 @@ fn class_skeleton_items() -> Vec<CompletionItem> {
             "Open WebUI Pipeline skeleton",
             "class Pipeline:\n    def __init__(self):\n        self.name = \"${1:My Pipeline}\"\n\n    async def pipe(self, body: dict) -> ${2:str}:\n        ${0:return body}",
         ),
+        snippet(
+            "owui-event",
+            "Open WebUI Event skeleton",
+            "class Event:\n    class Valves(BaseModel):\n        ${1:enabled}: bool = True\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def event(self, event: dict, __event_name__: str) -> ${2:None}:\n        ${0:pass}",
+        ),
     ]
 }
 
@@ -179,6 +184,11 @@ fn class_member_items() -> Vec<CompletionItem> {
             "action-method",
             "Action handler method",
             "async def action(self, body: dict) -> ${1:dict}:\n    ${0:return body}",
+        ),
+        snippet(
+            "event-method",
+            "Event handler method",
+            "async def event(self, event: dict, __event_name__: str) -> ${1:None}:\n    ${0:pass}",
         ),
     ]
 }
@@ -267,6 +277,7 @@ mod tests {
             .collect();
         assert!(labels.iter().any(|l| l == "owui-tools"), "got {labels:?}");
         assert!(labels.iter().any(|l| l == "owui-pipe"), "got {labels:?}");
+        assert!(labels.iter().any(|l| l == "owui-event"), "got {labels:?}");
     }
 
     #[test]

@@ -6,23 +6,25 @@
 
 | Provenance | Value |
 |---|---|
-| Synced (UTC) | 2026-06-09T14:35:28Z |
-| owui-lint version | 0.9.0 |
-| open-webui | `main@02dc3e689cea` (latest release v0.9.6) |
+| Synced (UTC) | 2026-07-23T05:06:45Z |
+| owui-lint version | 0.10.0 |
+| open-webui | `main@ecd48e2f7182` (latest release v0.10.2) |
 | pipelines | `main@039f9c54f8e9` |
-| docs | `main@8fc55ed443af` |
+| docs | `main@3a0bad14c7a8` |
 
 > Cite these by symbol (function/identifier), never by line number — line
 > numbers drift across upstream releases.
 
 | Local copy | Upstream URL | sha256 |
 |---|---|---|
-| `plugin.py` | <https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/utils/plugin.py> | `9b4abd9a649513e0606e06b97df71b2482328cf1d64ae4fc821678d907330336` |
-| `tools.py` | <https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/utils/tools.py> | `0b29b8bb59d1324eabadfe7f78629b19be13e53cfb92fd63972da62b0b07db47` |
+| `plugin.py` | <https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/utils/plugin.py> | `e2ef21dac45ca859f02fce2d5478792d0cbfaa657d78be2df7b9ec93537b4444` |
+| `tools.py` | <https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/utils/tools.py> | `722728ae6ff754d0cc9483130e1793a8de6e535d19354fbaac5ca74826840959` |
 | `filter.py` | <https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/utils/filter.py> | `e80a0f88f21b1b98e6cb1ffbdfca3b20672fe2a9cf4f184db61996068f234690` |
 | `actions.py` | <https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/utils/actions.py> | `3911109d08a3604876a24283055111e8efecaefeade8f22ede07798f0b96b687` |
+| `events.py` | <https://raw.githubusercontent.com/open-webui/open-webui/refs/heads/main/backend/open_webui/events.py> | `d4045343a53048eaaf947dff5492a0d8408284d1474c64146d753cf7d53a55c9` |
 | `pipelines-main.py` | <https://raw.githubusercontent.com/open-webui/pipelines/main/main.py> | `6ef3572a589691574af980e2cf01deac326c4fee2b4402d751264f4488ca5e63` |
-| `plugin-overview.mdx` | <https://raw.githubusercontent.com/open-webui/docs/main/docs/features/extensibility/plugin/index.mdx> | `901f02efd383d2683368c633db1ec007fb3c7759b648b1cfcd9e659736cc1e82` |
-| `tools-development.mdx` | <https://raw.githubusercontent.com/open-webui/docs/main/docs/features/extensibility/plugin/tools/development.mdx> | `c0af3609f896a7fd3bcf8bb0d6009b7c27d4e5cd6728eded23b672e133d8ed5f` |
-| `events.mdx` | <https://raw.githubusercontent.com/open-webui/docs/main/docs/features/extensibility/plugin/development/events.mdx> | `5a98f6480a8fcf7cfbcd71484603510b19904246a3a7321379d634d782691a25` |
-| `valves.mdx` | <https://raw.githubusercontent.com/open-webui/docs/main/docs/features/extensibility/plugin/development/valves.mdx> | `47f3b1feb8dbfaed34493c0436a54d67cb469dd3cf3496c12d0ce4c2f7ff855f` |
+| `plugin-overview.mdx` | <https://raw.githubusercontent.com/open-webui/docs/main/docs/features/extensibility/plugin/index.mdx> | `701992ef7b7e814e5cd80ca7cd308961c3904fcb8049ac895f95e27c7950bd2d` |
+| `tools-development.mdx` | <https://raw.githubusercontent.com/open-webui/docs/main/docs/features/extensibility/plugin/tools/development.mdx> | `0c70227dfdeab473a6fc60d337ab3a86e1fbbe64f36ba26c399e73a04d0bd8e7` |
+| `events.mdx` | <https://raw.githubusercontent.com/open-webui/docs/main/docs/features/extensibility/plugin/development/events.mdx> | `73deb89f5bf0bacfdd2cd34750c117fc788a0e5919263798fc4b3b902f6a06ba` |
+| `event-function.mdx` | <https://raw.githubusercontent.com/open-webui/docs/main/docs/features/extensibility/plugin/functions/event.mdx> | `b13858b8662713e8aa1dc85a7bca25b3a18a8a0bde89a6eed98bca64454692c2` |
+| `valves.mdx` | <https://raw.githubusercontent.com/open-webui/docs/main/docs/features/extensibility/plugin/development/valves.mdx> | `f87410cc648ac60abc6568ff40ef9d0aba9c7593e75a823d4c1e7864d54b7cac` |

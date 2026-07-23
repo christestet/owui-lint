@@ -27,10 +27,11 @@ PoC → then the rest of the rule catalog → then the trust-report format.
 | Vector | Evidence (cite by symbol, not line) | Severity driver | Conditional? |
 |---|---|---|---|
 | Module body runs at load via `exec(content, module.__dict__)` | `plugin.py` `load_tool_module_by_id` / `load_function_module_by_id` | Top-level + class-body code (incl. Pydantic field defaults) runs on import, no user consent | always |
-| `__init__` runs at load because OWUI **instantiates** the class | `plugin.py`: `return module.Tools()` / `module.Pipe()` / `module.Filter()` / `module.Action()` right after `exec` | `__init__` body (and `self.Valves()` it calls) runs on import — but only *because* OWUI constructs the object | always (verified) |
+| `__init__` runs at load because OWUI **instantiates** the class | `plugin.py`: `return module.Tools()` / `module.Pipe()` / `module.Filter()` / `module.Action()` / `module.Event()` right after `exec` | `__init__` body (and `self.Valves()` it calls) runs on import — but only *because* OWUI constructs the object | always (verified) |
 | `requirements` frontmatter → `pip install` via `subprocess.check_call` | `plugin.py` `install_frontmatter_requirements` | Supply chain (unpinned versions) | **only if `ENABLE_PIP_INSTALL_FRONTMATTER_REQUIREMENTS` and not `OFFLINE_MODE`** |
 | `execute` event: unsandboxed JS via `new Function()` (DOM/cookies/localStorage) | Docs `events.mdx` → "execute" | Client-side exfiltration | depends on frontend/version |
 | No execution timeout, tasks keep running after tab close | Docs `events.mdx` → "Persistence & Browser Disconnection" | Resource DoS / cryptomining | always |
+| **`Event` functions auto-dispatch on system activity** (170+ events, `<area>.<action>`), not user action | `events.py` `dispatch_event_functions()` calls the instance's `event()` handler for every system event; `__app__` is injected, allowing route registration / app-state mutation | Broadens the import-time threat model into an **always-on, auto-triggered** attack surface: full server privileges with no user action required, admin-only creation is the only gate | always (when an `Event` class is present and defines `event()`) |
 | Official threat list: exfiltrate data, malware, cryptomining, lateral movement | Docs `plugin-overview.mdx` "CRITICAL SECURITY WARNING" | — | — |
 
 > **Why "cite by symbol, not line":** the bundled reference copy of `plugin.py`
@@ -41,16 +42,19 @@ PoC → then the rest of the rule catalog → then the trust-report format.
 > truth and the scope-aware pass must handle both:**
 > | Loader (source) | Mechanism | Entry classes instantiated at load |
 > |---|---|---|
-> | `plugin.py` (`open-webui`) | `exec(content, module.__dict__)` then `module.Tools()` | `Tools`, `Pipe`, `Filter`, `Action` |
+> | `plugin.py` (`open-webui`) | `exec(content, module.__dict__)` then `module.Tools()` | `Tools`, `Pipe`, `Filter`, `Action`, `Event` |
 > | `main.py` (`open-webui/pipelines`, **separate repo**) | `spec.loader.exec_module(module)` then `module.Pipeline()` | `Pipeline` |
 >
 > So `plugin.py` does **not** govern pipelines. Both run the module body at import and
 > then construct the entry object (→ `__init__` is import-time in both). For
-> `InitBody` scope detection, recognize **all five** class conventions
-> (`Tools`/`Pipe`/`Filter`/`Action`/`Pipeline`), not just `Tools`. Function valves are
+> `InitBody` scope detection, recognize **all six** class conventions
+> (`Tools`/`Pipe`/`Filter`/`Action`/`Event`/`Pipeline`), not just `Tools`. Function valves are
 > additionally re-instantiated at runtime by `utils/filter.py`
 > (`function_module.Valves(**…)`) — that doesn't change import-time severity, but it's
-> why `filter.py` is pulled too.
+> why `filter.py` is pulled too. `Event` functions are additionally re-instantiated
+> per **dispatch** (`events.py` `dispatch_event_functions`, not just at import) and,
+> unlike the other four, run **automatically** on system events rather than in
+> response to a user action — see the new row in §1.1.
 
 **Ground truth (don't assume — fetch and diff):** the upstream files every OWSEC
 rule is designed against are pulled by `scripts/sync-owui-sources.sh` into

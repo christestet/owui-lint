@@ -7,7 +7,7 @@ description: What owui-lint checks and where it fits.
 
 It focuses on Open WebUI-specific structure and runtime compatibility:
 
-- extension class detection for Tools, Pipe, Filter, Action, and Pipeline files
+- extension class detection for Tools, Pipe, Filter, Action, Event, and Pipeline files
 - Valves and UserValves configuration patterns
 - required hook methods and payload parameters
 - public tool method quality

@@ -442,11 +442,13 @@ fn current_top_level_class_index(contexts: &[Context]) -> Option<usize> {
     None
 }
 
-/// The five class conventions Open WebUI instantiates immediately after `exec` (the
-/// backend entry classes plus the Pipelines `Pipeline`). An `__init__` body runs at
-/// import time only for these — a helper class's `__init__` runs only if it is
-/// constructed, so it must not be treated as import-time.
-const ENTRY_CLASS_NAMES: [&str; 5] = ["Tools", "Pipe", "Filter", "Action", "Pipeline"];
+/// The class conventions Open WebUI instantiates immediately after `exec` (the backend
+/// entry classes plus the Pipelines `Pipeline`). `Event` (new in Open WebUI 0.10.0) is
+/// loaded the same way — `load_function_module_by_id` returns `module.Event()` — so its
+/// `__init__` also runs at import time. An `__init__` body runs at import time only for
+/// these — a helper class's `__init__` runs only if it is constructed, so it must not be
+/// treated as import-time.
+const ENTRY_CLASS_NAMES: [&str; 6] = ["Tools", "Pipe", "Filter", "Action", "Pipeline", "Event"];
 
 fn is_entry_class_name(name: &str) -> bool {
     ENTRY_CLASS_NAMES.contains(&name)

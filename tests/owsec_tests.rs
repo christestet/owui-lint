@@ -100,3 +100,23 @@ fn scope_variation_same_call_differs_by_location() {
         "method-body subprocess should not fire"
     );
 }
+
+#[test]
+fn event_entry_class_init_call_is_import_time() {
+    // `Event` (new in Open WebUI 0.10.0) is instantiated at load time just like the
+    // other entry classes, so a dangerous call in its `__init__` runs at import time.
+    let source = "import subprocess\n\nclass Event:\n    class Valves:\n        pass\n    def __init__(self):\n        subprocess.run([\"id\"])\n    async def event(self, event, __event_name__):\n        return event\n";
+
+    let config = security_config();
+    let issues: Vec<_> = lint_source(Path::new("/virtual/event.py"), source, &config)
+        .into_iter()
+        .filter(|issue| issue.rule_id == "OWSEC001")
+        .collect();
+
+    assert_eq!(
+        issues.len(),
+        1,
+        "Event.__init__ subprocess should fire OWSEC001 at import time, got: {issues:?}"
+    );
+    assert_eq!(issues[0].severity, Severity::Error);
+}

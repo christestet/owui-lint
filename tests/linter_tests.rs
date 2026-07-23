@@ -701,6 +701,130 @@ fn sensitive_user_valve_field_without_password_type_warns_owui023() {
     );
 }
 
+#[test]
+fn valid_event_extension_has_no_findings() {
+    let temp = TempDir::new("event_valid");
+    let file_path = temp.write(
+        "event.py",
+        "from pydantic import BaseModel\n\nclass Event:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def event(self, event: dict, __event_name__: str):\n        return event\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, summary) = lint_files(&files, &config);
+
+    assert!(
+        issues.is_empty(),
+        "valid Event extension should have no findings, got: {issues:?}"
+    );
+    assert_eq!(summary.errors, 0);
+    assert_eq!(summary.warnings, 0);
+}
+
+#[test]
+fn event_without_event_method_errors_owe600() {
+    let temp = TempDir::new("owe600");
+    let file_path = temp.write(
+        "event.py",
+        "from pydantic import BaseModel\n\nclass Event:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def other(self, event: dict):\n        return event\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWE600" && issue.severity == Severity::Error),
+        "Expected OWE600 for Event without an event method, got: {issues:?}"
+    );
+}
+
+#[test]
+fn sync_event_handler_warns_owe601() {
+    let temp = TempDir::new("owe601");
+    let file_path = temp.write(
+        "event.py",
+        "from pydantic import BaseModel\n\nclass Event:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    def event(self, event: dict, __event_name__: str):\n        return event\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWE601" && issue.severity == Severity::Warning),
+        "Expected OWE601 for sync event handler, got: {issues:?}"
+    );
+}
+
+#[test]
+fn event_handler_without_event_param_warns_owe602() {
+    let temp = TempDir::new("owe602");
+    let file_path = temp.write(
+        "event.py",
+        "from pydantic import BaseModel\n\nclass Event:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def event(self, payload: dict):\n        return payload\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWE602" && issue.severity == Severity::Warning),
+        "Expected OWE602 for event handler missing event parameter, got: {issues:?}"
+    );
+}
+
+#[test]
+fn event_handler_with_event_name_only_does_not_warn_owe602() {
+    let temp = TempDir::new("owe602_event_name");
+    let file_path = temp.write(
+        "event.py",
+        "from pydantic import BaseModel\n\nclass Event:\n    class Valves(BaseModel):\n        pass\n\n    def __init__(self):\n        self.valves = self.Valves()\n\n    async def event(self, __event_name__: str, __event_id__: str):\n        return __event_name__\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        !issues.iter().any(|issue| issue.rule_id == "OWE602"),
+        "Declaring __event_name__ should satisfy OWE602, got: {issues:?}"
+    );
+}
+
+#[test]
+fn mixed_event_and_tools_warns_owui011() {
+    let temp = TempDir::new("owui011_event_tools");
+    let file_path = temp.write(
+        "mixed.py",
+        "from pydantic import BaseModel\n\nclass Tools:\n    async def search(self, query: str) -> str:\n        \"\"\"Search.\"\"\"\n        return query\n\nclass Event:\n    async def event(self, event: dict, __event_name__: str):\n        return event\n",
+    );
+
+    let config = Config::default();
+    let files = discover_python_files(&[file_path], &config.include, &config.exclude)
+        .expect("discovery should work");
+    let (issues, _) = lint_files(&files, &config);
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.rule_id == "OWUI011" && issue.severity == Severity::Error),
+        "Expected OWUI011 for mixed Event + Tools file, got: {issues:?}"
+    );
+}
+
 struct TempDir {
     path: PathBuf,
 }

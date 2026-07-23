@@ -1,20 +1,22 @@
 # owui-lint for VS Code
 
 Live linting for [Open WebUI](https://docs.openwebui.com/) extensions — Tools,
-Pipe, Filter, Action and Pipeline — powered by the `owui-lint` language server.
+Pipe, Filter, Action, Event and Pipeline — powered by the `owui-lint` language
+server.
 
 This extension **complements** a Python language server (Pylance/Pyright). It
 does not provide general Python IntelliSense or syntax checking; it adds only the
 Open WebUI–specific layer:
 
-- **Diagnostics** while you type (the `OWT*/OWP*/OWF*/OWA*/OWPL*/OWUI*` rules).
+- **Diagnostics** while you type (the `OWT*/OWP*/OWF*/OWA*/OWE*/OWPL*/OWUI*` rules).
 - **Hover** explanations with remediation and docs links for each finding.
 - **Quick fixes**: make a handler `async`, add a docstring stub, add missing
   module-header fields, or disable a rule for the project.
 - **Completions** — live LSP scaffolding snippets for Open WebUI Python files:
   class skeletons (`owui-tools`, `owui-pipe`, `owui-filter`, `owui-action`,
-  `owui-pipeline`), `Valves`/`UserValves`, handler methods (`pipe-method`,
-  `inlet-method`, `outlet-method`, `action-method`), and module header fields
+  `owui-event`, `owui-pipeline`), `Valves`/`UserValves`, handler methods
+  (`pipe-method`, `inlet-method`, `outlet-method`, `action-method`,
+  `event-method`), and module header fields
   (`version`, `title`, `requirements`, `author`, `description`).
 
 ## Requirements

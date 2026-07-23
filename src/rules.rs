@@ -21,6 +21,7 @@ const FILTER_DOC: &str =
     "https://docs.openwebui.com/features/extensibility/plugin/functions/filter";
 const ACTION_DOC: &str =
     "https://docs.openwebui.com/features/extensibility/plugin/functions/action";
+const EVENT_DOC: &str = "https://docs.openwebui.com/features/extensibility/plugin/functions/event";
 const VALVES_DOC: &str =
     "https://docs.openwebui.com/features/extensibility/plugin/development/valves";
 const VALVES_INPUT_TYPES_DOC: &str =
@@ -48,6 +49,9 @@ pub const OWF304: &str = "OWF304";
 pub const OWA400: &str = "OWA400";
 pub const OWA401: &str = "OWA401";
 pub const OWA402: &str = "OWA402";
+pub const OWE600: &str = "OWE600";
+pub const OWE601: &str = "OWE601";
+pub const OWE602: &str = "OWE602";
 pub const OWPL500: &str = "OWPL500";
 pub const OWPL501: &str = "OWPL501";
 pub const OWUI023: &str = "OWUI023";
@@ -70,8 +74,8 @@ const RULES: &[RuleDoc] = &[
         id: OWUI010,
         default_severity: Severity::Warning,
         title: "No extension class detected",
-        summary: "The file looks like an extension, but no Tools/Pipe/Filter/Action/Pipeline class was found.",
-        remediation: "Define exactly one top-level extension class with a supported name.",
+        summary: "The file looks like an extension, but no Tools/Pipe/Filter/Action/Pipeline/Event class was found.",
+        remediation: "Define exactly one top-level extension class with a supported name (Tools, Pipe, Filter, Action, Pipeline, or Event).",
         help_url: PLUGIN_OVERVIEW,
         openwebui_version: "0.1.0",
     },
@@ -245,6 +249,33 @@ const RULES: &[RuleDoc] = &[
         remediation: "Use `async def action(...)` and await I/O operations.",
         help_url: ACTION_DOC,
         openwebui_version: "0.1.0",
+    },
+    RuleDoc {
+        id: OWE600,
+        default_severity: Severity::Error,
+        title: "Event method missing",
+        summary: "Event extension must define an `event` method. Open WebUI's `dispatch_event_functions` reads `getattr(function_module, 'event', None)` and silently skips the function when the instance has no `event` method, so the extension never runs.",
+        remediation: "Add `async def event(self, event, ...)` to the `Event` class.",
+        help_url: EVENT_DOC,
+        openwebui_version: "0.10.0",
+    },
+    RuleDoc {
+        id: OWE601,
+        default_severity: Severity::Warning,
+        title: "Event handler should be async",
+        summary: "Synchronous `event` handlers are called inline (`handler(**params)`) inside Open WebUI's async dispatch loop, blocking the event loop.",
+        remediation: "Use `async def event(...)` and await I/O operations.",
+        help_url: EVENT_DOC,
+        openwebui_version: "0.10.0",
+    },
+    RuleDoc {
+        id: OWE602,
+        default_severity: Severity::Warning,
+        title: "Event handler missing event parameter",
+        summary: "`Event.event` should declare an `event` parameter (and typically `__event_name__`). Open WebUI only injects reserved kwargs that appear in the handler signature, so without them the handler receives no event payload.",
+        remediation: "Change signature to `event(self, event, __event_name__=None, ...)` so Open WebUI injects the payload.",
+        help_url: EVENT_DOC,
+        openwebui_version: "0.10.0",
     },
     RuleDoc {
         id: OWPL500,

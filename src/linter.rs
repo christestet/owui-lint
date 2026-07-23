@@ -9,17 +9,18 @@ use crate::config::Config;
 use crate::glob::glob_match;
 use crate::models::{ClassInfo, Issue, LintSummary, ModuleInfo, Severity, SeverityOverride};
 use crate::rules::{
-    OWA400, OWA401, OWA402, OWF300, OWF301, OWF303, OWF304, OWP200, OWP201, OWP202, OWPL500,
-    OWPL501, OWSEC001, OWT100, OWT101, OWT102, OWT103, OWUI001, OWUI010, OWUI011, OWUI020, OWUI021,
-    OWUI022, OWUI023, OWUI030, OWUI031, OWUI032, issue,
+    OWA400, OWA401, OWA402, OWE600, OWE601, OWE602, OWF300, OWF301, OWF303, OWF304, OWP200, OWP201,
+    OWP202, OWPL500, OWPL501, OWSEC001, OWT100, OWT101, OWT102, OWT103, OWUI001, OWUI010, OWUI011,
+    OWUI020, OWUI021, OWUI022, OWUI023, OWUI030, OWUI031, OWUI032, issue,
 };
 
-const EXTENSION_CLASSES: [(&str, &str); 5] = [
+const EXTENSION_CLASSES: [(&str, &str); 6] = [
     ("Tools", "tools"),
     ("Pipe", "pipe"),
     ("Filter", "filter"),
     ("Action", "action"),
     ("Pipeline", "pipeline"),
+    ("Event", "event"),
 ];
 
 pub fn discover_python_files(
@@ -173,7 +174,7 @@ fn lint_module(module: &ModuleInfo, config: &Config) -> Vec<Issue> {
                 &module.path,
                 1,
                 1,
-                "No Open WebUI extension class found (Tools, Pipe, Filter, Action, Pipeline).",
+                "No Open WebUI extension class found (Tools, Pipe, Filter, Action, Pipeline, Event).",
             ));
         }
         return issues;
@@ -220,6 +221,8 @@ fn looks_like_openwebui_extension(module: &ModuleInfo) -> bool {
         "actions",
         "pipeline",
         "pipelines",
+        "event",
+        "events",
     ];
     let suspicious_methods = [
         "pipe",
@@ -228,6 +231,7 @@ fn looks_like_openwebui_extension(module: &ModuleInfo) -> bool {
         "outlet",
         "stream",
         "action",
+        "event",
         "on_startup",
         "on_shutdown",
         "on_valves_updated",
@@ -251,6 +255,7 @@ fn lint_extension_class(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
         Some("filter") => issues.extend(lint_filter(path, class_info)),
         Some("action") => issues.extend(lint_action(path, class_info)),
         Some("pipeline") => issues.extend(lint_pipeline(path, class_info)),
+        Some("event") => issues.extend(lint_event(path, class_info)),
         _ => {}
     }
 
@@ -584,6 +589,48 @@ fn lint_action(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
             action.line,
             action.column,
             "Action.action should accept a `body` parameter.",
+        ));
+    }
+
+    issues
+}
+
+fn lint_event(path: &Path, class_info: &ClassInfo) -> Vec<Issue> {
+    let mut issues = Vec::new();
+
+    let Some(event) = class_info.method("event") else {
+        return vec![issue(
+            OWE600,
+            path,
+            class_info.line,
+            class_info.column,
+            "Event class must define an 'event' method; Open WebUI silently skips the function otherwise.",
+        )];
+    };
+
+    if !event.is_async {
+        issues.push(issue(
+            OWE601,
+            path,
+            event.line,
+            event.column,
+            "Event.event should be async; sync handlers run inline in Open WebUI's async dispatch loop and block it.",
+        ));
+    }
+
+    // Open WebUI injects reserved kwargs only when they appear in the signature (or the
+    // handler declares `**kwargs`). Without `event`/`__event_name__` the handler cannot
+    // see the event payload.
+    if !has_param(event, "event")
+        && !has_param(event, "__event_name__")
+        && !has_param(event, "kwargs")
+    {
+        issues.push(issue(
+            OWE602,
+            path,
+            event.line,
+            event.column,
+            "Event.event should accept an `event` parameter (and typically `__event_name__`) to receive the event payload from Open WebUI.",
         ));
     }
 
