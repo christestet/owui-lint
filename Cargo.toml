@@ -2,6 +2,7 @@
 name = "owui-lint"
 version = "0.10.0"
 edition = "2024"
+# Minimum supported Rust version; development and release toolchains are pinned separately.
 rust-version = "1.93.1"
 description = "Rust CLI linter for Open WebUI extensions."
 license = "MIT"
