@@ -89,10 +89,9 @@ pub(super) fn paren_balance(value: &str) -> i32 {
 pub(super) fn parse_function_definition(trimmed: &str) -> Option<FunctionDef> {
     let (payload, is_async) = if let Some(payload) = trimmed.strip_prefix("async def ") {
         (payload, true)
-    } else if let Some(payload) = trimmed.strip_prefix("def ") {
-        (payload, false)
     } else {
-        return None;
+        let payload = trimmed.strip_prefix("def ")?;
+        (payload, false)
     };
 
     let open_paren = payload.find('(')?;
