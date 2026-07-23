@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.11.0](https://github.com/christestet/owui-lint/compare/v0.10.0...v0.11.0) (2026-07-23)
+
+
+### Features
+
+* **rules:** support Open WebUI 0.10 Event functions (OWE600-602) ([754b10f](https://github.com/christestet/owui-lint/commit/754b10f0c7519d85880322386f672202f2bcbde3))
+
+
+### Bug Fixes
+
+* **ci:** satisfy current clippy ([ab5a65f](https://github.com/christestet/owui-lint/commit/ab5a65f157a57f48a48c59a98be8e270b3137138))
+* **deps-dev:** bump @types/node from 26.0.1 to 26.1.1 in /editors/vscode ([482624f](https://github.com/christestet/owui-lint/commit/482624ffd842d2e1b2c1ee476e8133805071c14e))
+* **deps-dev:** bump typescript from 6.0.3 to 7.0.2 in /editors/vscode ([c7b187d](https://github.com/christestet/owui-lint/commit/c7b187deb9e6e51b6be05489e2845d072a8c0637))
+* **deps:** bump @astrojs/starlight from 0.41.1 to 0.41.4 in /docs ([b4ccdeb](https://github.com/christestet/owui-lint/commit/b4ccdeb95da5a53a8fb47976bf8307370a5dbef7))
+* **deps:** bump actions/setup-node from 6 to 7 ([0911d69](https://github.com/christestet/owui-lint/commit/0911d69502885adb8de5021b91421ce693eb0271))
+* **deps:** bump anyhow from 1.0.103 to 1.0.104 ([c24cdf7](https://github.com/christestet/owui-lint/commit/c24cdf724cc86056703de44fce7e5cee2926c08a))
+* **deps:** bump astro from 7.0.3 to 7.1.3 in /docs ([28ef095](https://github.com/christestet/owui-lint/commit/28ef095f074c45244cddabeade0796e97a4571eb))
+* **deps:** bump astro from 7.0.3 to 7.1.3 in /docs ([1f7540e](https://github.com/christestet/owui-lint/commit/1f7540e05724761343dea4145bcfffec0122384f))
+* **deps:** bump brace-expansion from 5.0.6 to 5.0.7 in /editors/vscode ([8108c97](https://github.com/christestet/owui-lint/commit/8108c97ef02f8dfe0893f1dcbb9d65fb747e44b6))
+* **deps:** bump clap from 4.6.1 to 4.6.2 ([521d1bd](https://github.com/christestet/owui-lint/commit/521d1bd6d5fa40cbfa2ecd7f7dc39606709438a3))
+* **deps:** bump lsp-server from 0.8.0 to 0.10.0 ([3e0e859](https://github.com/christestet/owui-lint/commit/3e0e859ab1fdb6e969fb3594f32959dbd0c6b9cb))
+* **deps:** bump serde from 1.0.228 to 1.0.229 ([03134b3](https://github.com/christestet/owui-lint/commit/03134b37dad21da57bc8bd95515cd7647af50b02))
+* **deps:** bump typescript from 6.0.3 to 7.0.2 in /docs ([ff2ea25](https://github.com/christestet/owui-lint/commit/ff2ea25d602ecd44d6c3e454d8ac8ca68d018754))
+* **deps:** bump vscode-languageclient in /editors/vscode ([c2728ae](https://github.com/christestet/owui-lint/commit/c2728ae8f25ee7aedc4f659c5a01190233b31e8a))
+* **deps:** complete dependency upgrades ([098d554](https://github.com/christestet/owui-lint/commit/098d55456fcbd3865dcf9290e627be6eb9053304))
+* **vscode:** lint untitled buffers, PowerShell-safe CLI update ([65d07de](https://github.com/christestet/owui-lint/commit/65d07de98256aeda43440cf9226c86d10f4c9c60))
+
 ## [0.10.0](https://github.com/christestet/owui-lint/compare/v0.9.0...v0.10.0) (2026-06-09)
 
 

@@ -1,6 +1,6 @@
 [package]
 name = "owui-lint"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 # Minimum supported Rust version; development and release toolchains are pinned separately.
 rust-version = "1.93.1"
