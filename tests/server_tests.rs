@@ -493,7 +493,10 @@ fn requests_until_response(client: &Connection, expected: &RequestId) -> Vec<Req
                     &response.id, expected,
                     "unexpected response id (awaited {expected:?}): {response:?}"
                 );
-                assert!(response.error.is_none(), "unexpected error: {response:?}");
+                assert!(
+                    response.response_result.is_ok(),
+                    "unexpected error: {response:?}"
+                );
                 return requests;
             }
             Message::Request(request) => requests.push(request),
@@ -576,8 +579,11 @@ fn recv_response(client: &Connection, expected: &RequestId) -> serde_json::Value
                     &response.id, expected,
                     "unexpected response id (awaited {expected:?}): {response:?}"
                 );
-                assert!(response.error.is_none(), "unexpected error: {response:?}");
-                return response.result.unwrap_or(serde_json::Value::Null);
+                assert!(
+                    response.response_result.is_ok(),
+                    "unexpected error: {response:?}"
+                );
+                return response.response_result.unwrap_or(serde_json::Value::Null);
             }
             // Ignore unrelated notifications/requests (e.g. diagnostics).
             Message::Notification(_) | Message::Request(_) => continue,

@@ -409,8 +409,7 @@ fn parse_params<T: DeserializeOwned>(
 fn respond<T: Serialize>(connection: &Connection, id: RequestId, result: &T) -> Result<()> {
     let response = Response {
         id,
-        result: Some(serde_json::to_value(result)?),
-        error: None,
+        response_result: Ok(serde_json::to_value(result)?),
     };
     connection
         .sender
@@ -427,8 +426,7 @@ fn respond_error(
 ) -> Result<()> {
     let response = Response {
         id,
-        result: None,
-        error: Some(ResponseError {
+        response_result: Err(ResponseError {
             code: code as i32,
             message,
             data: None,
