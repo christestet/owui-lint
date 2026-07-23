@@ -67,7 +67,10 @@ function createClient(): LanguageClient {
   };
 
   const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ scheme: "file", language: "python" }],
+    documentSelector: [
+      { scheme: "file", language: "python" },
+      { scheme: "untitled", language: "python" },
+    ],
   };
 
   return new LanguageClient("owui-lint", "owui-lint", serverOptions, clientOptions);
@@ -177,10 +180,29 @@ async function updateCli(): Promise<void> {
   });
 }
 
+/**
+ * Quotes an executable path for the integrated terminal's shell.
+ *
+ * The terminal's default shell differs by platform: PowerShell on Windows,
+ * a POSIX shell elsewhere. Their quoting rules are incompatible, so we branch
+ * on `process.platform`. The fast path returns the value unquoted when it
+ * contains only shell-safe characters (no quoting needed on any shell).
+ */
 function quoteForShell(value: string): string {
   if (/^[A-Za-z0-9._/-]+$/.test(value)) {
     return value;
   }
+
+  if (process.platform === "win32") {
+    // PowerShell: backslash is a literal path separator, not an escape
+    // character, so POSIX-style `\"` escaping is wrong here. Inside a
+    // double-quoted string an embedded `"` is escaped by doubling it (`""`).
+    // A quoted string on its own is treated as a string literal, not a
+    // command, so the call operator `&` is required to execute it.
+    return `& "${value.replace(/"/g, '""')}"`;
+  }
+
+  // POSIX shells: escape the characters that stay special inside double quotes.
   return `"${value.replace(/(["\\$`])/g, "\\$1")}"`;
 }
 

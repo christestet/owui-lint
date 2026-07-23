@@ -26,6 +26,7 @@
     "pipes",
     "filters",
     "actions",
+    "events",
     "pipelines"
   ],
   "galleryBanner": {
